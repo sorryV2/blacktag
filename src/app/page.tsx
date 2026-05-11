@@ -406,7 +406,7 @@ function loadLS<T>(key: string, fallback: T): T {
 
 export default function HomePage() {
   const [active, setActive] = useState("Dashboard");
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [mobileMenu, setMobileMenu] = useState(false);
   const [products, setProducts] = useState<Product[]>(() =>
     loadLS("bt-products", defaultProducts)
   );
@@ -639,6 +639,12 @@ useEffect(() => localStorage.setItem("bt-trends", JSON.stringify(trends)), [tren
     "Siti Web": clients.length,
   };
 
+  function changeSection(section: string) {
+    setActive(section);
+    setMobileMenu(false);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
   const visibleProducts = products
     .filter((p) => {
       if (active === "Da Caricare") return p.status === "Da Caricare";
@@ -688,6 +694,41 @@ useEffect(() => localStorage.setItem("bt-trends", JSON.stringify(trends)), [tren
     }
   }
 
+  async function uploadProductImage(productId: number, file: File) {
+    if (!supabase) {
+      alert("Supabase non configurato");
+      return;
+    }
+
+    try {
+      const fileExt = file.name.split(".").pop();
+      const fileName = `${productId}-${Date.now()}.${fileExt}`;
+      const filePath = `products/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("product-images")
+        .upload(filePath, file, {
+          cacheControl: "3600",
+          upsert: true,
+        });
+
+      if (uploadError) throw uploadError;
+
+      const { data } = supabase.storage
+        .from("product-images")
+        .getPublicUrl(filePath);
+
+      if (!data.publicUrl) {
+        throw new Error("URL immagine non generato");
+      }
+
+      updateProduct(productId, "image", data.publicUrl);
+    } catch (error: any) {
+      alert(error?.message || "Errore caricamento immagine");
+    }
+  }
+
+
   return (
     <main className="min-h-screen overflow-hidden bg-[#03040a] text-white selection:bg-fuchsia-500/40 [font-feature-settings:'cv02','cv03','cv04','cv11']">
       <style jsx global>{`
@@ -715,15 +756,16 @@ useEffect(() => localStorage.setItem("bt-trends", JSON.stringify(trends)), [tren
       <div className="pointer-events-none fixed left-[20%] top-[-10%] h-[520px] w-[520px] rounded-full bg-purple-700/15 blur-[120px]" />
       <div className="pointer-events-none fixed right-[-12%] top-[18%] h-[560px] w-[560px] rounded-full bg-fuchsia-600/10 blur-[130px]" />
 
-      {mobileMenuOpen && (
-        <div
-          onClick={() => setMobileMenuOpen(false)}
+      {mobileMenu && (
+        <button
+          onClick={() => setMobileMenu(false)}
           className="fixed inset-0 z-30 bg-black/70 backdrop-blur-sm xl:hidden"
+          aria-label="Chiudi menu"
         />
       )}
 
-      <aside className={`fixed left-0 top-0 z-40 h-screen w-[265px] border-r border-white/10 bg-[#060812]/95 p-4 shadow-2xl shadow-black/60 backdrop-blur-2xl transition-transform duration-300 xl:z-20 xl:translate-x-0 ${
-        mobileMenuOpen ? "translate-x-0" : "-translate-x-full xl:translate-x-0"
+      <aside className={`fixed left-0 top-0 z-40 h-screen w-[285px] border-r border-white/10 bg-[#060812]/95 p-4 shadow-2xl shadow-black/60 backdrop-blur-2xl transition-transform duration-300 xl:w-[265px] xl:translate-x-0 ${
+        mobileMenu ? "translate-x-0" : "-translate-x-full"
       }`}>
         <div className="mb-7 flex items-center gap-3 rounded-2xl border border-white/5 bg-white/[0.025] p-3">
           <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-purple-500/40 bg-purple-600/20 text-purple-300 shadow-lg shadow-purple-700/30"><Shield size={20} /></div>
@@ -732,8 +774,9 @@ useEffect(() => localStorage.setItem("bt-trends", JSON.stringify(trends)), [tren
             <p className="mt-1 text-xs tracking-wide text-zinc-500">COMMAND CENTER</p>
           </div>
           <button
-            onClick={() => setMobileMenuOpen(false)}
+            onClick={() => setMobileMenu(false)}
             className="grid h-9 w-9 place-items-center rounded-xl border border-white/10 bg-white/[0.04] text-zinc-300 xl:hidden"
+            aria-label="Chiudi menu"
           >
             <X size={18} />
           </button>
@@ -745,7 +788,7 @@ useEffect(() => localStorage.setItem("bt-trends", JSON.stringify(trends)), [tren
               {group.title && <p className="mb-3 px-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">{group.title}</p>}
               <div className="space-y-1">
                 {group.items.map(([name, Icon]: any) => (
-                  <button key={name} onClick={() => { setActive(name); setMobileMenuOpen(false); }} className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-sm transition ${active === name ? "bg-gradient-to-r from-purple-700 via-fuchsia-600 to-purple-700 text-white shadow-lg shadow-purple-700/40 ring-1 ring-white/10" : "text-zinc-400 hover:bg-white/[0.06] hover:text-white hover:translate-x-1"}`}>
+                  <button key={name} onClick={() => changeSection(name)} className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-sm transition ${active === name ? "bg-gradient-to-r from-purple-700 via-fuchsia-600 to-purple-700 text-white shadow-lg shadow-purple-700/40 ring-1 ring-white/10" : "text-zinc-400 hover:bg-white/[0.06] hover:text-white hover:translate-x-1"}`}>
                     <Icon size={16} />
                     <span className="flex-1">{name}</span>
                     {menuCounts[name] !== undefined && <span className="rounded-full bg-purple-700/70 px-2 py-0.5 text-xs text-purple-100 shadow shadow-purple-700/30">{menuCounts[name]}</span>}
@@ -768,23 +811,17 @@ useEffect(() => localStorage.setItem("bt-trends", JSON.stringify(trends)), [tren
         </div>
       </aside>
 
-      <section className="relative z-10 min-h-screen p-4 xl:ml-[265px] xl:p-7">
-        <div className="mb-4 flex items-center justify-between rounded-2xl border border-white/10 bg-[#0d0f1a]/80 p-3 shadow-xl shadow-black/30 backdrop-blur-xl xl:hidden">
-          <button
-            onClick={() => setMobileMenuOpen(true)}
-            className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-purple-700 to-fuchsia-600 px-4 py-2 text-sm font-bold shadow-lg shadow-purple-700/30"
-          >
-            <Menu size={18} />
-            Menu
-          </button>
-
-          <div className="text-right">
-            <p className="text-sm font-black">BLACK<span className="text-fuchsia-500">TAG</span></p>
-            <p className="text-[11px] text-zinc-500">{active}</p>
-          </div>
-        </div>
+      <section className="relative z-10 min-h-screen p-4 pb-28 xl:ml-[265px] xl:p-7">
         <header className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-          <div>
+          <div className="flex items-start gap-3">
+            <button
+              onClick={() => setMobileMenu(true)}
+              className="mt-1 grid h-12 w-12 shrink-0 place-items-center rounded-2xl border border-white/10 bg-white/[0.055] text-white shadow-xl shadow-black/20 transition hover:border-purple-500/40 hover:bg-white/[0.08] xl:hidden"
+              aria-label="Apri menu"
+            >
+              <Menu size={22} />
+            </button>
+            <div>
             <div className="inline-flex items-center gap-2 rounded-full border border-purple-500/20 bg-purple-500/10 px-3 py-1 text-xs font-bold text-purple-200">
               <span className="h-2 w-2 rounded-full bg-green-400 shadow-lg shadow-green-400/60" />
               BLACKTAG LIVE COMMAND
@@ -797,6 +834,7 @@ useEffect(() => localStorage.setItem("bt-trends", JSON.stringify(trends)), [tren
             <p className={`mt-1 text-xs ${cloudError ? "text-red-300" : "text-green-300"}`}>
               {supabase ? cloudError || "Cloud Supabase collegato" : "Supabase non configurato"}
             </p>
+            </div>
           </div>
           <div className="flex items-center gap-3">
             <div className="flex w-full items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.055] px-4 py-3 shadow-xl shadow-black/20 backdrop-blur-xl transition focus-within:border-purple-500/50 focus-within:ring-2 focus-within:ring-purple-500/20 xl:w-[470px]">
@@ -1053,7 +1091,7 @@ useEffect(() => localStorage.setItem("bt-trends", JSON.stringify(trends)), [tren
         )}
 
         {["Inventario", "Da Caricare", "Online", "Venduti", "Ordini da Spedire"].includes(active) && (
-          <ProductsTable title={active} products={visibleProducts} updateProduct={updateProduct} deleteProduct={(id: number) => setProducts((p) => p.filter((x) => x.id !== id))} addProduct={addProduct} />
+          <ProductsTable title={active} products={visibleProducts} updateProduct={updateProduct} deleteProduct={(id: number) => setProducts((p) => p.filter((x) => x.id !== id))} addProduct={addProduct} uploadProductImage={uploadProductImage} />
         )}
 
         {active === "Fornitori" && <SuppliersSection suppliers={suppliers} setSuppliers={setSuppliers} />}
@@ -1083,7 +1121,29 @@ useEffect(() => localStorage.setItem("bt-trends", JSON.stringify(trends)), [tren
         {active === "Fatture" && <Empty title="Fatture" text="Qui metteremo pagamenti, rinnovi, canoni e fatture clienti." icon={FileText} />}
         {active === "Suggeritore Prezzi" && <Empty title="Suggeritore Prezzi" text="Qui calcoleremo prezzo consigliato, margine, profitto e prezzo minimo." icon={Sparkles} />}
         {active === "Impostazioni" && <Empty title="Impostazioni" text="Qui metteremo profilo, valuta, tema, notifiche e backup dati." icon={Settings} />}
-        {active === "Integrazioni" && <Empty title="Integrazioni" text="Qui collegheremo Vercel, Supabase, Vinted, Google Sheets, email e strumenti esterni." icon={Link2} />}
+        {active === "Integrazioni" && <Empty title="Integrazioni" text="Vercel, Supabase, Vinted e Storage immagini sono pronti. Bucket: product-images." icon={Link2} />}
+
+        <div className="fixed bottom-4 left-4 right-4 z-30 grid grid-cols-4 gap-2 rounded-[24px] border border-white/10 bg-[#090b14]/90 p-2 shadow-2xl shadow-black/60 backdrop-blur-2xl xl:hidden">
+          {[
+            ["Dashboard", Home],
+            ["Inventario", Package],
+            ["Clienti", UserRound],
+            ["Ricerca Trend", Search],
+          ].map(([name, Icon]: any) => (
+            <button
+              key={name}
+              onClick={() => changeSection(name)}
+              className={`flex flex-col items-center gap-1 rounded-2xl px-2 py-2 text-[10px] font-bold ${
+                active === name
+                  ? "bg-gradient-to-r from-purple-700 to-fuchsia-600 text-white"
+                  : "text-zinc-400"
+              }`}
+            >
+              <Icon size={17} />
+              <span className="truncate">{name}</span>
+            </button>
+          ))}
+        </div>
       </section>
     </main>
   );
@@ -1150,7 +1210,7 @@ function AI({ stats, big = false }: any) {
   );
 }
 
-function ProductsTable({ title, products, updateProduct, deleteProduct, addProduct }: any) {
+function ProductsTable({ title, products, updateProduct, deleteProduct, addProduct, uploadProductImage }: any) {
   return (
     <Panel className="xl:col-span-3">
       <div className="mb-5 flex items-center justify-between"><h3 className="font-bold">{title}</h3><button onClick={addProduct} className="flex items-center gap-2 rounded-2xl bg-gradient-to-r from-purple-700 to-fuchsia-600 px-4 py-2 text-sm font-bold shadow-lg shadow-purple-700/25 transition hover:-translate-y-0.5 hover:shadow-purple-700/40 hover:bg-purple-600"><Plus size={16} /> Aggiungi Prodotto</button></div>
@@ -1158,7 +1218,31 @@ function ProductsTable({ title, products, updateProduct, deleteProduct, addProdu
         {products.map((product: Product) => (
           <tr key={product.id} className="rounded-xl border-t border-white/5 transition hover:bg-white/[0.025]">
             <td className="py-3"><div className="flex items-center gap-3"><img src={product.image} alt={product.name} className="h-14 w-14 rounded-xl object-cover" /><div><input value={product.name} onChange={(e) => updateProduct(product.id, "name", e.target.value)} className="w-56 bg-transparent font-bold outline-none" /><input value={product.size} onChange={(e) => updateProduct(product.id, "size", e.target.value)} className="block w-40 bg-transparent text-xs text-zinc-500 outline-none" /></div></div></td>
-            <td><input value={product.image} onChange={(e) => updateProduct(product.id, "image", e.target.value)} className="w-64 rounded-2xl border border-white/10 bg-[#171925]/80 px-4 py-2.5 text-[13px] font-semibold text-zinc-100 shadow-inner shadow-black/20 outline-none transition placeholder:text-zinc-600 hover:border-white/15 focus:border-purple-500/60 focus:bg-[#1b1d2b] focus:ring-2 focus:ring-purple-500/20" /></td>
+            <td>
+              <div className="flex min-w-[300px] flex-col gap-2">
+                <label className="inline-flex cursor-pointer items-center justify-center rounded-2xl bg-gradient-to-r from-purple-700 to-fuchsia-600 px-4 py-2 text-xs font-black shadow-lg shadow-purple-700/25 transition hover:-translate-y-0.5">
+                  Carica immagine
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file && uploadProductImage) {
+                        uploadProductImage(product.id, file);
+                      }
+                    }}
+                  />
+                </label>
+
+                <input
+                  value={product.image}
+                  onChange={(e) => updateProduct(product.id, "image", e.target.value)}
+                  placeholder="Oppure incolla URL immagine"
+                  className="w-full rounded-2xl border border-white/10 bg-[#171925]/80 px-4 py-2.5 text-[12px] font-semibold text-zinc-100 shadow-inner shadow-black/20 outline-none transition placeholder:text-zinc-600 hover:border-white/15 focus:border-purple-500/60 focus:bg-[#1b1d2b] focus:ring-2 focus:ring-purple-500/20"
+                />
+              </div>
+            </td>
             <td><input type="number" value={product.cost} onChange={(e) => updateProduct(product.id, "cost", e.target.value)} className="w-24 rounded-2xl border border-white/10 bg-[#171925]/80 px-4 py-2.5 text-[13px] font-semibold text-zinc-100 shadow-inner shadow-black/20 outline-none transition placeholder:text-zinc-600 hover:border-white/15 focus:border-purple-500/60 focus:bg-[#1b1d2b] focus:ring-2 focus:ring-purple-500/20" /></td>
             <td><input type="number" value={product.price} onChange={(e) => updateProduct(product.id, "price", e.target.value)} className="w-24 rounded-2xl border border-white/10 bg-[#171925]/80 px-4 py-2.5 text-[13px] font-semibold text-zinc-100 shadow-inner shadow-black/20 outline-none transition placeholder:text-zinc-600 hover:border-white/15 focus:border-purple-500/60 focus:bg-[#1b1d2b] focus:ring-2 focus:ring-purple-500/20" /></td>
             <td className="font-bold text-green-400">€{(product.price - product.cost).toFixed(2)}</td>
@@ -1819,7 +1903,7 @@ function CalendarPicker({ selectedDate, setSelectedDate, calendarOpen, setCalend
   }
 
   return (
-    <div className="relative block">
+    <div className="relative hidden xl:block">
       <button
         onClick={() => setCalendarOpen((value: boolean) => !value)}
         className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.055] px-4 py-3 text-sm shadow-xl shadow-black/20 transition hover:border-purple-500/40 hover:bg-white/[0.08]"
