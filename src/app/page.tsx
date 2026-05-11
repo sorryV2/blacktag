@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { createClient } from "@supabase/supabase-js";
 import {
   Home, Package, Upload, Globe, ShoppingBag, Truck, Users, ReceiptText,
   Settings, Bot, Search, Bell, Calendar, Box, Wallet, TrendingUp, Plus,
@@ -28,7 +29,7 @@ type Client = {
   monthly: number;
   paid: number;
   site: string;
-  status: "Attivo" | "Da contattare" | "In sviluppo";
+  status: "Venduto" | "Attivo" | "Da contattare" | "In sviluppo";
 };
 
 type Supplier = {
@@ -166,7 +167,10 @@ function buildEarningsChart(products: Product[], clients: Client[]) {
     .filter((product) => product.status === "Venduto")
     .reduce((sum, product) => sum + product.price, 0);
 
-  const clientRevenue = clients.reduce((sum, client) => sum + client.monthly, 0);
+  const clientRevenue = clients
+    .filter((client) => client.status === "Attivo" || client.status === "Venduto")
+    .reduce((sum, client) => sum + client.monthly + client.paid, 0);
+
   const total = soldRevenue + clientRevenue;
 
   const points = [0.08, 0.14, 0.22, 0.31, 0.44, 0.52, 0.61, 0.70, 0.77, 0.85, 0.93, 1];
@@ -377,6 +381,19 @@ const menuGroups = [
   { title: "IMPOSTAZIONI", items: [["Impostazioni", Settings], ["Integrazioni", Link2]] },
 ];
 
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+
+const supabase =
+  supabaseUrl && supabaseAnonKey
+    ? createClient(supabaseUrl, supabaseAnonKey)
+    : null;
+
+function removeEmptyRows<T extends { id: number }>(rows: T[]) {
+  return rows.filter((row) => row && row.id);
+}
+
 function loadLS<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback;
   try {
@@ -419,6 +436,111 @@ const [vintedResults, setVintedResults] = useState<VintedResult[]>([]);
   const [vintedMaxPrice, setVintedMaxPrice] = useState(0);
   const [isSearchingTrend, setIsSearchingTrend] = useState(false);
   const [trendError, setTrendError] = useState("");
+  const [cloudReady, setCloudReady] = useState(false);
+  const [cloudError, setCloudError] = useState("");
+
+  useEffect(() => {
+    async function loadCloudData() {
+      if (!supabase) {
+        setCloudReady(true);
+        return;
+      }
+
+      try {
+        setCloudError("");
+
+        const [
+          productsResult,
+          clientsResult,
+          expensesResult,
+          supplierOrdersResult,
+        ] = await Promise.all([
+          supabase.from("products").select("*").order("id", { ascending: true }),
+          supabase.from("clients").select("*").order("id", { ascending: true }),
+          supabase.from("expenses").select("*").order("id", { ascending: true }),
+          supabase.from("supplier_orders").select("*").order("id", { ascending: true }),
+        ]);
+
+        if (productsResult.error) throw productsResult.error;
+        if (clientsResult.error) throw clientsResult.error;
+        if (expensesResult.error) throw expensesResult.error;
+        if (supplierOrdersResult.error) throw supplierOrdersResult.error;
+
+        if (productsResult.data && productsResult.data.length > 0) {
+          setProducts(productsResult.data as Product[]);
+        }
+
+        if (clientsResult.data && clientsResult.data.length > 0) {
+          setClients(clientsResult.data as Client[]);
+        }
+
+        if (expensesResult.data && expensesResult.data.length > 0) {
+          setExpenses(expensesResult.data as Expense[]);
+        }
+
+        if (supplierOrdersResult.data && supplierOrdersResult.data.length > 0) {
+          setSupplierOrders(supplierOrdersResult.data as SupplierOrder[]);
+        }
+      } catch (error: any) {
+        setCloudError(error?.message || "Errore collegamento Supabase");
+      } finally {
+        setCloudReady(true);
+      }
+    }
+
+    loadCloudData();
+  }, []);
+
+  async function replaceSupabaseTable(table: string, rows: any[]) {
+    if (!supabase || !cloudReady) return;
+
+    const cleanRows = removeEmptyRows(rows);
+
+    const deleteResult = await supabase.from(table).delete().neq("id", 0);
+    if (deleteResult.error) throw deleteResult.error;
+
+    if (cleanRows.length > 0) {
+      const insertResult = await supabase.from(table).insert(cleanRows);
+      if (insertResult.error) throw insertResult.error;
+    }
+  }
+
+  useEffect(() => {
+    localStorage.setItem("bt-products", JSON.stringify(products));
+
+    if (!cloudReady) return;
+    replaceSupabaseTable("products", products).catch((error) =>
+      setCloudError(error?.message || "Errore salvataggio prodotti")
+    );
+  }, [products, cloudReady]);
+
+  useEffect(() => {
+    localStorage.setItem("bt-clients", JSON.stringify(clients));
+
+    if (!cloudReady) return;
+    replaceSupabaseTable("clients", clients).catch((error) =>
+      setCloudError(error?.message || "Errore salvataggio clienti")
+    );
+  }, [clients, cloudReady]);
+
+  useEffect(() => {
+    localStorage.setItem("bt-expenses", JSON.stringify(expenses));
+
+    if (!cloudReady) return;
+    replaceSupabaseTable("expenses", expenses).catch((error) =>
+      setCloudError(error?.message || "Errore salvataggio spese")
+    );
+  }, [expenses, cloudReady]);
+
+  useEffect(() => {
+    localStorage.setItem("bt-supplier-orders", JSON.stringify(supplierOrders));
+
+    if (!cloudReady) return;
+    replaceSupabaseTable("supplier_orders", supplierOrders).catch((error) =>
+      setCloudError(error?.message || "Errore salvataggio ordini fornitori")
+    );
+  }, [supplierOrders, cloudReady]);
+
 
   useEffect(() => {
     localStorage.setItem("bt-products", JSON.stringify(products));
@@ -447,26 +569,43 @@ const [vintedResults, setVintedResults] = useState<VintedResult[]>([]);
   useEffect(() => {
     localStorage.setItem("bt-trend-search", JSON.stringify(trendSearch));
   }, [trendSearch]);
-
-useEffect(() => localStorage.setItem("bt-products", JSON.stringify(products)), [products]);
-  useEffect(() => localStorage.setItem("bt-clients", JSON.stringify(clients)), [clients]);
-  useEffect(() => localStorage.setItem("bt-suppliers", JSON.stringify(suppliers)), [suppliers]);
-  useEffect(() => localStorage.setItem("bt-supplier-orders", JSON.stringify(supplierOrders)), [supplierOrders]);
-  useEffect(() => localStorage.setItem("bt-expenses", JSON.stringify(expenses)), [expenses]);
-  useEffect(() => localStorage.setItem("bt-trends", JSON.stringify(trends)), [trends]);
+useEffect(() => localStorage.setItem("bt-suppliers", JSON.stringify(suppliers)), [suppliers]);
+useEffect(() => localStorage.setItem("bt-trends", JSON.stringify(trends)), [trends]);
 
   const stats = useMemo(() => {
     const sold = products.filter((p) => p.status === "Venduto");
     const online = products.filter((p) => p.status === "Online");
     const shipping = products.filter((p) => p.status === "Da Spedire");
     const upload = products.filter((p) => p.status === "Da Caricare");
-    const revenue = sold.reduce((a, p) => a + p.price, 0);
-    const profit = sold.reduce((a, p) => a + p.price - p.cost, 0);
+    const productRevenue = sold.reduce((a, p) => a + p.price, 0);
+    const productProfit = sold.reduce((a, p) => a + p.price - p.cost, 0);
+
+    const clientRevenue = clients
+      .filter((client) => client.status === "Attivo" || client.status === "Venduto")
+      .reduce((sum, client) => sum + client.monthly + client.paid, 0);
+
+    const revenue = productRevenue + clientRevenue;
+    const profit = productProfit + clientRevenue;
+
     const stock = products.reduce((a, p) => a + p.cost, 0);
     const supplierCost = supplierOrders.reduce((a, o) => a + o.cost, 0);
     const expenseCost = expenses.reduce((a, e) => a + e.amount, 0);
-    return { sold, online, shipping, upload, revenue, profit, stock, supplierCost, expenseCost };
-  }, [products, supplierOrders, expenses]);
+
+    return {
+      sold,
+      online,
+      shipping,
+      upload,
+      revenue,
+      profit,
+      stock,
+      supplierCost,
+      expenseCost,
+      productRevenue,
+      productProfit,
+      clientRevenue,
+    };
+  }, [products, clients, supplierOrders, expenses]);
 
   const categoryStats = useMemo(() => buildCategoryStats(products), [products]);
   const categoryTotal = products.filter((product) => product.status === "Venduto").length || products.length;
@@ -625,6 +764,9 @@ useEffect(() => localStorage.setItem("bt-products", JSON.stringify(products)), [
             <p className="mt-1 text-xs text-purple-300">
               Data selezionata: {new Date(selectedDate).toLocaleDateString("it-IT")}
             </p>
+            <p className={`mt-1 text-xs ${cloudError ? "text-red-300" : "text-green-300"}`}>
+              {supabase ? cloudError || "Cloud Supabase collegato" : "Supabase non configurato"}
+            </p>
           </div>
           <div className="flex items-center gap-3">
             <div className="flex w-full items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.055] px-4 py-3 shadow-xl shadow-black/20 backdrop-blur-xl transition focus-within:border-purple-500/50 focus-within:ring-2 focus-within:ring-purple-500/20 xl:w-[470px]">
@@ -642,7 +784,7 @@ useEffect(() => localStorage.setItem("bt-products", JSON.stringify(products)), [
         </header>
 
         <section className="mb-5 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-6">
-          <Stat title="Incasso Venduto" value={`€${stats.revenue.toFixed(2)}`} icon={TrendingUp} sub="+18,6% questo mese" />
+          <Stat title="Incasso Totale" value={`€${stats.revenue.toFixed(2)}`} icon={TrendingUp} sub="+18,6% questo mese" />
           <Stat title="Profitto Reale" value={`€${stats.profit.toFixed(2)}`} icon={Wallet} sub="+22,4%" />
           <Stat title="Prodotti Online" value={stats.online.length} icon={Globe} sub="+3 nuovi" />
           <Stat title="Prodotti Venduti" value={stats.sold.length} icon={ShoppingBag} sub="+2 questa settimana" />
@@ -1125,7 +1267,7 @@ function StatsSection({ stats, products }: any) {
           <PremiumStatCard
             title="Venduti"
             value={stats.sold.length}
-            sub={`Incasso venduto €${totalRevenue.toFixed(2)}`}
+            sub={`Incasso totale €${totalRevenue.toFixed(2)}`}
             icon="🛒"
             tone="green"
             progress={sellRate}
@@ -1214,7 +1356,7 @@ function StatsSection({ stats, products }: any) {
           </div>
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <FinanceBox label="Incasso venduto" value={`€${totalRevenue.toFixed(2)}`} tone="green" />
+            <FinanceBox label="Incasso totale" value={`€${totalRevenue.toFixed(2)}`} tone="green" />
             <FinanceBox label="Profitto lordo" value={`€${stats.profit.toFixed(2)}`} tone="purple" />
             <FinanceBox label="Costi totali" value={`€${totalCosts.toFixed(2)}`} tone="red" />
             <FinanceBox label="Risultato netto" value={`€${netResult.toFixed(2)}`} tone={netResult >= 0 ? "green" : "red"} />
@@ -1371,7 +1513,7 @@ function ClientsSection({ clients, setClients }: any) {
         <div>
           <h3 className="text-xl font-black">Clienti Siti Web</h3>
           <p className="text-sm text-zinc-400">
-            Gestisci clienti, canone mensile, costo sito pagato e stato.
+            Gestisci clienti, canone mensile, sito pagato e stato. Venduto/Attivo entrano nel guadagno.
           </p>
         </div>
 
@@ -1427,7 +1569,7 @@ function ClientsSection({ clients, setClients }: any) {
 
               <div>
                 <label className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">
-                  Costo sito pagato
+                  Sito pagato
                 </label>
                 <div className="mt-1 flex items-center gap-2">
                   <span>€</span>
@@ -1460,6 +1602,7 @@ function ClientsSection({ clients, setClients }: any) {
                 }
                 className="rounded-lg bg-purple-700/40 px-3 py-2 text-xs outline-none"
               >
+                <option>Venduto</option>
                 <option>Attivo</option>
                 <option>Da contattare</option>
                 <option>In sviluppo</option>
@@ -1487,7 +1630,7 @@ function SitesSection({ clients, setClients, setActive }: any) {
         {clients.map((client: Client) => (
           <div key={client.id} className="grid items-center gap-4 rounded-xl bg-white/[0.04] p-4 md:grid-cols-6">
             <input value={client.site} onChange={(e) => setClients((prev: Client[]) => prev.map((c) => c.id === client.id ? { ...c, site: e.target.value } : c))} className="rounded-2xl border border-white/10 bg-[#171925]/80 px-4 py-2.5 text-[13px] font-extrabold text-zinc-50 shadow-inner shadow-black/20 outline-none transition placeholder:text-zinc-600 hover:border-white/15 focus:border-purple-500/60 focus:bg-[#1b1d2b] focus:ring-2 focus:ring-purple-500/20" />
-            <span>{client.name}</span><span>Canone: €{client.monthly}</span><span>Costo sito: €{client.paid}</span><span className="text-green-400">{client.status}</span><button onClick={() => setActive("Clienti")} className="rounded-lg bg-purple-700 px-3 py-2 text-sm hover:bg-purple-600">Gestisci</button>
+            <span>{client.name}</span><span>Canone: €{client.monthly}</span><span>Sito pagato: €{client.paid}</span><span className="text-green-400">{client.status}</span><button onClick={() => setActive("Clienti")} className="rounded-lg bg-purple-700 px-3 py-2 text-sm hover:bg-purple-600">Gestisci</button>
           </div>
         ))}
       </div>
