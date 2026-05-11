@@ -417,6 +417,7 @@ function loadLS<T>(key: string, fallback: T): T {
 export default function HomePage() {
   const [active, setActive] = useState("Dashboard");
   const [mobileMenu, setMobileMenu] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const [products, setProducts] = useState<Product[]>(() =>
     loadLS("bt-products", defaultProducts)
   );
@@ -449,6 +450,10 @@ const [vintedResults, setVintedResults] = useState<VintedResult[]>([]);
   const [trendError, setTrendError] = useState("");
   const [hotTrends, setHotTrends] = useState<HotTrend[]>([]);
   const [isScanningHotTrends, setIsScanningHotTrends] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
   const [cloudReady, setCloudReady] = useState(false);
   const [cloudError, setCloudError] = useState("");
 
@@ -843,6 +848,24 @@ useEffect(() => localStorage.setItem("bt-trends", JSON.stringify(trends)), [tren
     } catch (error: any) {
       alert(error?.message || "Errore caricamento immagine");
     }
+  }
+
+
+
+  if (!mounted) {
+    return (
+      <main className="min-h-screen bg-[#03040a] text-white">
+        <div className="flex min-h-screen items-center justify-center">
+          <div className="rounded-[28px] border border-white/10 bg-[#0c0e19]/90 p-8 text-center shadow-2xl shadow-black/40">
+            <div className="mx-auto mb-4 h-12 w-12 animate-pulse rounded-2xl bg-gradient-to-r from-purple-700 to-fuchsia-600" />
+            <h1 className="text-2xl font-black">
+              BLACK<span className="text-fuchsia-500">TAG</span>
+            </h1>
+            <p className="mt-2 text-sm text-zinc-400">Caricamento dashboard...</p>
+          </div>
+        </div>
+      </main>
+    );
   }
 
 
