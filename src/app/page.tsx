@@ -481,57 +481,51 @@ const [vintedResults, setVintedResults] = useState<VintedResult[]>([]);
   }, []);
   const [cloudReady, setCloudReady] = useState(false);
   const [cloudError, setCloudError] = useState("");
+  const [isSyncingCloud, setIsSyncingCloud] = useState(false);
 
-  useEffect(() => {
-    async function loadCloudData() {
-      if (!supabase) {
-        setCloudReady(true);
-        return;
-      }
-
-      try {
-        setCloudError("");
-
-        const [
-          productsResult,
-          clientsResult,
-          expensesResult,
-          supplierOrdersResult,
-        ] = await Promise.all([
-          supabase.from("products").select("*").order("id", { ascending: true }),
-          supabase.from("clients").select("*").order("id", { ascending: true }),
-          supabase.from("expenses").select("*").order("id", { ascending: true }),
-          supabase.from("supplier_orders").select("*").order("id", { ascending: true }),
-        ]);
-
-        if (productsResult.error) throw productsResult.error;
-        if (clientsResult.error) throw clientsResult.error;
-        if (expensesResult.error) throw expensesResult.error;
-        if (supplierOrdersResult.error) throw supplierOrdersResult.error;
-
-        if (productsResult.data && productsResult.data.length > 0) {
-          setProducts(productsResult.data as Product[]);
-        }
-
-        if (clientsResult.data && clientsResult.data.length > 0) {
-          setClients(clientsResult.data as Client[]);
-        }
-
-        if (expensesResult.data && expensesResult.data.length > 0) {
-          setExpenses(expensesResult.data as Expense[]);
-        }
-
-        if (supplierOrdersResult.data && supplierOrdersResult.data.length > 0) {
-          setSupplierOrders(supplierOrdersResult.data as SupplierOrder[]);
-        }
-      } catch (error: any) {
-        setCloudError(error?.message || "Errore collegamento Supabase");
-      } finally {
-        setCloudReady(true);
-      }
+  async function refreshCloudData() {
+    if (!supabase) {
+      setCloudReady(true);
+      return;
     }
 
-    loadCloudData();
+    try {
+      setIsSyncingCloud(true);
+      setCloudError("");
+
+      const [
+        productsResult,
+        clientsResult,
+        expensesResult,
+        supplierOrdersResult,
+      ] = await Promise.all([
+        supabase.from("products").select("*").order("id", { ascending: true }),
+        supabase.from("clients").select("*").order("id", { ascending: true }),
+        supabase.from("expenses").select("*").order("id", { ascending: true }),
+        supabase.from("supplier_orders").select("*").order("id", { ascending: true }),
+      ]);
+
+      if (productsResult.error) throw productsResult.error;
+      if (clientsResult.error) throw clientsResult.error;
+      if (expensesResult.error) throw expensesResult.error;
+      if (supplierOrdersResult.error) throw supplierOrdersResult.error;
+
+      setProducts((productsResult.data || defaultProducts) as Product[]);
+      setClients((clientsResult.data || defaultClients) as Client[]);
+      setExpenses((expensesResult.data || defaultExpenses) as Expense[]);
+      setSupplierOrders((supplierOrdersResult.data || defaultSupplierOrders) as SupplierOrder[]);
+
+      setCloudReady(true);
+    } catch (error: any) {
+      setCloudError(error?.message || "Errore sincronizzazione Supabase");
+      setCloudReady(true);
+    } finally {
+      setIsSyncingCloud(false);
+    }
+  }
+
+  useEffect(() => {
+    refreshCloudData();
   }, []);
 
   async function replaceSupabaseTable(table: string, rows: any[]) {
@@ -745,6 +739,10 @@ useEffect(() => localStorage.setItem("bt-trends", JSON.stringify(trends)), [tren
     setActive(section);
     setMobileMenu(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
+
+    if (supabase) {
+      refreshCloudData();
+    }
   }
 
   const visibleProducts = products
@@ -1151,7 +1149,7 @@ useEffect(() => localStorage.setItem("bt-trends", JSON.stringify(trends)), [tren
               Data selezionata: {new Date(selectedDate).toLocaleDateString("it-IT")}
             </p>
             <p className={`mt-1 text-xs ${cloudError ? "text-red-300" : "text-green-300"}`}>
-              {supabase ? cloudError || "Cloud Supabase collegato" : "Supabase non configurato"}
+              {supabase ? isSyncingCloud ? "Sincronizzazione cloud..." : cloudError || "Cloud Supabase collegato" : "Supabase non configurato"}
             </p>
             </div>
           </div>
@@ -1161,6 +1159,14 @@ useEffect(() => localStorage.setItem("bt-trends", JSON.stringify(trends)), [tren
               <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Cerca prodotti, ordini, clienti..." className="w-full bg-transparent text-sm outline-none placeholder:text-zinc-500" />
             </div>
             <button className="rounded-2xl border border-white/10 bg-white/[0.055] p-3 shadow-xl shadow-black/20 transition hover:border-purple-500/40 hover:bg-white/[0.08]"><Bell size={18} /></button>
+            <button
+              onClick={refreshCloudData}
+              disabled={isSyncingCloud}
+              className="hidden rounded-2xl border border-white/10 bg-white/[0.055] px-4 py-3 text-sm font-black text-zinc-200 shadow-xl shadow-black/20 transition hover:border-purple-500/40 hover:bg-white/[0.08] disabled:opacity-60 md:block"
+            >
+              {isSyncingCloud ? "Sync..." : "🔄 Sync"}
+            </button>
+
             <CalendarPicker
               selectedDate={selectedDate}
               setSelectedDate={setSelectedDate}
@@ -1455,7 +1461,7 @@ useEffect(() => localStorage.setItem("bt-trends", JSON.stringify(trends)), [tren
         {active === "Impostazioni" && <Empty title="Impostazioni" text="Qui metteremo profilo, valuta, tema, notifiche e backup dati." icon={Settings} />}
         {active === "Integrazioni" && <Empty title="Integrazioni" text="Vercel, Supabase, Vinted e Storage immagini sono pronti. Bucket: product-images." icon={Link2} />}
 
-        <div className="fixed bottom-4 left-4 right-4 z-30 grid grid-cols-4 gap-2 rounded-[24px] border border-white/10 bg-[#090b14]/90 p-2 shadow-2xl shadow-black/60 backdrop-blur-2xl xl:hidden">
+        <div className="fixed bottom-4 left-4 right-4 z-30 grid grid-cols-5 gap-2 rounded-[24px] border border-white/10 bg-[#090b14]/90 p-2 shadow-2xl shadow-black/60 backdrop-blur-2xl xl:hidden">
           {[
             ["Dashboard", Home],
             ["Inventario", Package],
@@ -1475,6 +1481,15 @@ useEffect(() => localStorage.setItem("bt-trends", JSON.stringify(trends)), [tren
               <span className="truncate">{name}</span>
             </button>
           ))}
+
+          <button
+            onClick={refreshCloudData}
+            disabled={isSyncingCloud}
+            className="flex flex-col items-center gap-1 rounded-2xl px-2 py-2 text-[10px] font-bold text-zinc-400 disabled:opacity-60"
+          >
+            <span className="text-[17px]">🔄</span>
+            <span className="truncate">Sync</span>
+          </button>
         </div>
       </section>
     </main>
