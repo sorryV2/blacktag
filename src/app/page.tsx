@@ -6,7 +6,7 @@ import {
   Home, Package, Upload, Globe, ShoppingBag, Truck, Users, ReceiptText,
   Settings, Bot, Search, Bell, Calendar, Box, Wallet, TrendingUp, Plus,
   Trash2, Building2, ExternalLink, UserRound, Store, Sparkles, BarChart3,
-  CreditCard, Link2, FileText, Wand2, Shield
+  CreditCard, Link2, FileText, Wand2, Shield, Menu, X
 } from "lucide-react";
 
 type Status = "Da Caricare" | "Online" | "Venduto" | "Da Spedire";
@@ -406,6 +406,7 @@ function loadLS<T>(key: string, fallback: T): T {
 
 export default function HomePage() {
   const [active, setActive] = useState("Dashboard");
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [products, setProducts] = useState<Product[]>(() =>
     loadLS("bt-products", defaultProducts)
   );
@@ -714,13 +715,28 @@ useEffect(() => localStorage.setItem("bt-trends", JSON.stringify(trends)), [tren
       <div className="pointer-events-none fixed left-[20%] top-[-10%] h-[520px] w-[520px] rounded-full bg-purple-700/15 blur-[120px]" />
       <div className="pointer-events-none fixed right-[-12%] top-[18%] h-[560px] w-[560px] rounded-full bg-fuchsia-600/10 blur-[130px]" />
 
-      <aside className="fixed left-0 top-0 z-20 hidden h-screen w-[265px] border-r border-white/10 bg-[#060812]/80 p-4 shadow-2xl shadow-black/60 backdrop-blur-2xl xl:block">
+      {mobileMenuOpen && (
+        <div
+          onClick={() => setMobileMenuOpen(false)}
+          className="fixed inset-0 z-30 bg-black/70 backdrop-blur-sm xl:hidden"
+        />
+      )}
+
+      <aside className={`fixed left-0 top-0 z-40 h-screen w-[265px] border-r border-white/10 bg-[#060812]/95 p-4 shadow-2xl shadow-black/60 backdrop-blur-2xl transition-transform duration-300 xl:z-20 xl:translate-x-0 ${
+        mobileMenuOpen ? "translate-x-0" : "-translate-x-full xl:translate-x-0"
+      }`}>
         <div className="mb-7 flex items-center gap-3 rounded-2xl border border-white/5 bg-white/[0.025] p-3">
           <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-purple-500/40 bg-purple-600/20 text-purple-300 shadow-lg shadow-purple-700/30"><Shield size={20} /></div>
-          <div>
+          <div className="flex-1">
             <h1 className="text-2xl font-black leading-none">BLACK<span className="text-fuchsia-500">TAG</span></h1>
             <p className="mt-1 text-xs tracking-wide text-zinc-500">COMMAND CENTER</p>
           </div>
+          <button
+            onClick={() => setMobileMenuOpen(false)}
+            className="grid h-9 w-9 place-items-center rounded-xl border border-white/10 bg-white/[0.04] text-zinc-300 xl:hidden"
+          >
+            <X size={18} />
+          </button>
         </div>
 
         <nav className="h-[calc(100vh-240px)] space-y-6 overflow-y-auto pr-1">
@@ -729,7 +745,7 @@ useEffect(() => localStorage.setItem("bt-trends", JSON.stringify(trends)), [tren
               {group.title && <p className="mb-3 px-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">{group.title}</p>}
               <div className="space-y-1">
                 {group.items.map(([name, Icon]: any) => (
-                  <button key={name} onClick={() => setActive(name)} className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-sm transition ${active === name ? "bg-gradient-to-r from-purple-700 via-fuchsia-600 to-purple-700 text-white shadow-lg shadow-purple-700/40 ring-1 ring-white/10" : "text-zinc-400 hover:bg-white/[0.06] hover:text-white hover:translate-x-1"}`}>
+                  <button key={name} onClick={() => { setActive(name); setMobileMenuOpen(false); }} className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-sm transition ${active === name ? "bg-gradient-to-r from-purple-700 via-fuchsia-600 to-purple-700 text-white shadow-lg shadow-purple-700/40 ring-1 ring-white/10" : "text-zinc-400 hover:bg-white/[0.06] hover:text-white hover:translate-x-1"}`}>
                     <Icon size={16} />
                     <span className="flex-1">{name}</span>
                     {menuCounts[name] !== undefined && <span className="rounded-full bg-purple-700/70 px-2 py-0.5 text-xs text-purple-100 shadow shadow-purple-700/30">{menuCounts[name]}</span>}
@@ -753,6 +769,20 @@ useEffect(() => localStorage.setItem("bt-trends", JSON.stringify(trends)), [tren
       </aside>
 
       <section className="relative z-10 min-h-screen p-4 xl:ml-[265px] xl:p-7">
+        <div className="mb-4 flex items-center justify-between rounded-2xl border border-white/10 bg-[#0d0f1a]/80 p-3 shadow-xl shadow-black/30 backdrop-blur-xl xl:hidden">
+          <button
+            onClick={() => setMobileMenuOpen(true)}
+            className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-purple-700 to-fuchsia-600 px-4 py-2 text-sm font-bold shadow-lg shadow-purple-700/30"
+          >
+            <Menu size={18} />
+            Menu
+          </button>
+
+          <div className="text-right">
+            <p className="text-sm font-black">BLACK<span className="text-fuchsia-500">TAG</span></p>
+            <p className="text-[11px] text-zinc-500">{active}</p>
+          </div>
+        </div>
         <header className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div>
             <div className="inline-flex items-center gap-2 rounded-full border border-purple-500/20 bg-purple-500/10 px-3 py-1 text-xs font-bold text-purple-200">
@@ -1789,7 +1819,7 @@ function CalendarPicker({ selectedDate, setSelectedDate, calendarOpen, setCalend
   }
 
   return (
-    <div className="relative hidden xl:block">
+    <div className="relative block">
       <button
         onClick={() => setCalendarOpen((value: boolean) => !value)}
         className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.055] px-4 py-3 text-sm shadow-xl shadow-black/20 transition hover:border-purple-500/40 hover:bg-white/[0.08]"
