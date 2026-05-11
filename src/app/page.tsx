@@ -6,7 +6,7 @@ import {
   Home, Package, Upload, Globe, ShoppingBag, Truck, Users, ReceiptText,
   Settings, Bot, Search, Bell, Calendar, Box, Wallet, TrendingUp, Plus,
   Trash2, Building2, ExternalLink, UserRound, Store, Sparkles, BarChart3,
-  CreditCard, Link2, FileText, Wand2, Shield, Menu, X
+  CreditCard, Link2, FileText, Wand2, Shield, Menu, X, Sun, Moon, Download, FileDown, GripVertical
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -95,6 +95,14 @@ type HotTrend = {
   maxPrice: number;
   score: number;
   status: string;
+};
+
+type AppNotification = {
+  id: number;
+  title: string;
+  message: string;
+  time: string;
+  type: "success" | "warning" | "info";
 };
 
 type TrendHistoryItem = {
@@ -440,6 +448,12 @@ export default function HomePage() {
   const [active, setActive] = useState("Dashboard");
   const [mobileMenu, setMobileMenu] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [themeMode, setThemeMode] = useState<"dark" | "light">(() =>
+    loadLS("bt-theme-mode", "dark")
+  );
+  const [notifications, setNotifications] = useState<AppNotification[]>(() =>
+    loadLS("bt-notifications", [])
+  );
   const [products, setProducts] = useState<Product[]>(() =>
     loadLS("bt-products", defaultProducts)
   );
@@ -478,7 +492,106 @@ const [vintedResults, setVintedResults] = useState<VintedResult[]>([]);
 
   useEffect(() => {
     setMounted(true);
+
+    const existingManifest = document.querySelector('link[rel="manifest"]');
+    if (!existingManifest) {
+      const manifest = document.createElement("link");
+      manifest.rel = "manifest";
+      manifest.href = "/manifest.json";
+      document.head.appendChild(manifest);
+    }
+
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js").catch(() => {});
+    }
   }, []);
+
+  useEffect(() => {
+    localStorage.setItem("bt-theme-mode", JSON.stringify(themeMode));
+  }, [themeMode]);
+
+  useEffect(() => {
+    localStorage.setItem("bt-notifications", JSON.stringify(notifications.slice(0, 25)));
+  }, [notifications]);
+
+  function addNotification(title: string, message: string, type: AppNotification["type"] = "info") {
+    setNotifications((prev) => [
+      {
+        id: Date.now(),
+        title,
+        message,
+        type,
+        time: new Date().toLocaleTimeString("it-IT", {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+      },
+      ...prev,
+    ].slice(0, 25));
+
+    if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
+      new Notification(title, {
+        body: message,
+      });
+    }
+  }
+
+  async function enablePushNotifications() {
+    if (typeof window === "undefined" || !("Notification" in window)) {
+      addNotification("Notifiche non supportate", "Il browser non supporta le notifiche push.", "warning");
+      return;
+    }
+
+    const permission = await Notification.requestPermission();
+
+    if (permission === "granted") {
+      addNotification("Notifiche attive", "Riceverai notifiche live da BLACKTAG.", "success");
+    } else {
+      addNotification("Notifiche bloccate", "Devi abilitarle dalle impostazioni del browser.", "warning");
+    }
+  }
+
+  function exportClientInvoice(client: Client) {
+    const html = `
+      <html>
+        <head>
+          <title>Fattura ${client.name}</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 40px; color: #111; }
+            .box { border: 1px solid #ddd; padding: 24px; border-radius: 16px; }
+            h1 { margin: 0 0 8px; }
+            table { width: 100%; margin-top: 24px; border-collapse: collapse; }
+            td, th { padding: 12px; border-bottom: 1px solid #eee; text-align: left; }
+            .total { font-size: 24px; font-weight: 900; }
+          </style>
+        </head>
+        <body>
+          <div class="box">
+            <h1>BLACKTAG - Fattura</h1>
+            <p>Cliente: <b>${client.name}</b></p>
+            <p>Attività: ${client.business}</p>
+            <p>Sito: ${client.site}</p>
+            <table>
+              <tr><th>Voce</th><th>Importo</th></tr>
+              <tr><td>Sito pagato</td><td>€${client.paid.toFixed(2)}</td></tr>
+              <tr><td>Canone mensile</td><td>€${client.monthly.toFixed(2)}</td></tr>
+            </table>
+            <p class="total">Totale: €${(client.paid + client.monthly).toFixed(2)}</p>
+            <p>Stato: ${client.status}</p>
+          </div>
+          <script>window.print()</script>
+        </body>
+      </html>
+    `;
+
+    const win = window.open("", "_blank");
+    if (win) {
+      win.document.write(html);
+      win.document.close();
+    }
+  }
+
+
   const [cloudReady, setCloudReady] = useState(false);
   const [cloudError, setCloudError] = useState("");
   const [isSyncingCloud, setIsSyncingCloud] = useState(false);
@@ -549,7 +662,7 @@ const [vintedResults, setVintedResults] = useState<VintedResult[]>([]);
     replaceSupabaseTable("products", products).catch((error) =>
       setCloudError(error?.message || "Errore salvataggio prodotti")
     );
-  }, [products, cloudReady]);
+}, [products, cloudReady]);
 
   useEffect(() => {
     localStorage.setItem("bt-clients", JSON.stringify(clients));
@@ -756,7 +869,26 @@ useEffect(() => localStorage.setItem("bt-trends", JSON.stringify(trends)), [tren
     .filter((p) => `${p.name} ${p.brand} ${p.size}`.toLowerCase().includes(search.toLowerCase()));
 
   function updateProduct(id: number, field: keyof Product, value: string) {
-    setProducts((prev) => prev.map((p) => p.id === id ? { ...p, [field]: field === "cost" || field === "price" ? Number(value) : value } : p));
+    const oldProduct = products.find((product) => product.id === id);
+
+    setProducts((prev) =>
+      prev.map((p) =>
+        p.id === id
+          ? {
+              ...p,
+              [field]: field === "cost" || field === "price" ? Number(value) : value,
+            }
+          : p
+      )
+    );
+
+    if (field === "status" && value === "Venduto" && oldProduct?.status !== "Venduto") {
+      addNotification(
+        "Prodotto venduto",
+        `${oldProduct?.name || "Prodotto"} segnato come venduto.`,
+        "success"
+      );
+    }
   }
 
   function addProduct() {
@@ -993,7 +1125,36 @@ useEffect(() => localStorage.setItem("bt-trends", JSON.stringify(trends)), [tren
   }
 
 
-  async function uploadProductImage(productId: number, file: File) {
+  
+  function generateVintedDraft(product: Product) {
+    const profit = product.price - product.cost;
+    const draft = `Titolo:
+${product.name} ${product.size}
+
+Descrizione:
+${product.name} in ottime condizioni.
+Brand: ${product.brand}
+Taglia/Dettagli: ${product.size}
+Prezzo: €${product.price.toFixed(2)}
+
+✅ Prodotto controllato
+✅ Spedizione veloce
+✅ Imballaggio accurato
+
+Hashtag:
+#vinted #resell #streetwear #${product.brand.replaceAll(" ", "").toLowerCase()}
+
+Margine stimato: €${profit.toFixed(2)}`;
+
+    navigator.clipboard?.writeText(draft);
+    addNotification(
+      "Bozza Vinted pronta",
+      `Descrizione copiata per ${product.name}. Incollala su Vinted.`,
+      "success"
+    );
+  }
+
+async function uploadProductImage(productId: number, file: File) {
     if (!supabase) {
       alert("Supabase non configurato");
       return;
@@ -1047,7 +1208,9 @@ useEffect(() => localStorage.setItem("bt-trends", JSON.stringify(trends)), [tren
 
 
   return (
-    <main className="min-h-screen overflow-hidden bg-[#03040a] text-white selection:bg-fuchsia-500/40 [font-feature-settings:'cv02','cv03','cv04','cv11']">
+    <main className={`min-h-screen overflow-hidden selection:bg-fuchsia-500/40 [font-feature-settings:'cv02','cv03','cv04','cv11'] ${
+        themeMode === "dark" ? "bg-[#03040a] text-white" : "bg-[#f4f0ff] text-zinc-950"
+      }`}>
       <style jsx global>{`
         html, body {
           font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
@@ -1067,6 +1230,10 @@ useEffect(() => localStorage.setItem("bt-trends", JSON.stringify(trends)), [tren
         }
         input[type="number"]::-webkit-outer-spin-button,
         input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        select option {
+          background: #11131f;
+          color: #ffffff;
+        }
       `}</style>
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_9%_0%,rgba(147,51,234,.35),transparent_30%),radial-gradient(circle_at_78%_8%,rgba(59,130,246,.20),transparent_32%),radial-gradient(circle_at_52%_100%,rgba(217,70,239,.13),transparent_36%),linear-gradient(180deg,rgba(255,255,255,.045),transparent_58%)]" />
       <div className="pointer-events-none fixed inset-0 opacity-[0.075] [background-image:linear-gradient(rgba(255,255,255,.8)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.8)_1px,transparent_1px)] [background-size:64px_64px]" />
@@ -1160,6 +1327,21 @@ useEffect(() => localStorage.setItem("bt-trends", JSON.stringify(trends)), [tren
             </div>
             <button className="rounded-2xl border border-white/10 bg-white/[0.055] p-3 shadow-xl shadow-black/20 transition hover:border-purple-500/40 hover:bg-white/[0.08]"><Bell size={18} /></button>
             <button
+              onClick={() => setThemeMode(themeMode === "dark" ? "light" : "dark")}
+              className="hidden rounded-2xl border border-white/10 bg-white/[0.055] p-3 text-zinc-200 shadow-xl shadow-black/20 transition hover:border-purple-500/40 hover:bg-white/[0.08] md:grid"
+              title="Cambia tema"
+            >
+              {themeMode === "dark" ? <Sun size={18} /> : <Moon size={18} />}
+            </button>
+
+            <button
+              onClick={enablePushNotifications}
+              className="hidden rounded-2xl border border-white/10 bg-white/[0.055] px-4 py-3 text-sm font-black text-zinc-200 shadow-xl shadow-black/20 transition hover:border-purple-500/40 hover:bg-white/[0.08] lg:block"
+            >
+              🔔 Notifiche
+            </button>
+
+            <button
               onClick={refreshCloudData}
               disabled={isSyncingCloud}
               className="hidden rounded-2xl border border-white/10 bg-white/[0.055] px-4 py-3 text-sm font-black text-zinc-200 shadow-xl shadow-black/20 transition hover:border-purple-500/40 hover:bg-white/[0.08] disabled:opacity-60 md:block"
@@ -1184,6 +1366,30 @@ useEffect(() => localStorage.setItem("bt-trends", JSON.stringify(trends)), [tren
           <Stat title="Valore Stock" value={`€${stats.stock.toFixed(2)}`} icon={Box} sub="+5,7%" />
           <Stat title="Da Spedire" value={stats.shipping.length} icon={Truck} sub="Attenzione richiesta" warn />
         </section>
+
+        {notifications.length > 0 && (
+          <div className="mb-5 grid grid-cols-1 gap-3 xl:grid-cols-3">
+            {notifications.slice(0, 3).map((note) => (
+              <div
+                key={note.id}
+                className={`rounded-2xl border p-4 shadow-xl shadow-black/20 ${
+                  note.type === "success"
+                    ? "border-green-500/20 bg-green-500/10"
+                    : note.type === "warning"
+                    ? "border-yellow-500/20 bg-yellow-500/10"
+                    : "border-purple-500/20 bg-purple-500/10"
+                }`}
+              >
+                <div className="mb-1 flex items-center justify-between">
+                  <p className="text-sm font-black">Live Notifications</p>
+                  <span className="text-xs text-zinc-500">{note.time}</span>
+                </div>
+                <p className="text-sm font-bold">{note.title}</p>
+                <p className="text-xs text-zinc-400">{note.message}</p>
+              </div>
+            ))}
+          </div>
+        )}
 
         {active === "Dashboard" && (
           <section className="grid grid-cols-1 gap-5 xl:grid-cols-12">
@@ -1341,7 +1547,25 @@ useEffect(() => localStorage.setItem("bt-trends", JSON.stringify(trends)), [tren
                         </td>
                         <td>€{product.cost.toFixed(2)}</td>
                         <td>€{product.price.toFixed(2)}</td>
-                        <td className="font-bold text-green-400">€{(product.price - product.cost).toFixed(2)}</td>
+                        <td>
+              <div className="font-bold text-green-400">€{(product.price - product.cost).toFixed(2)}</div>
+              <div className={`mt-1 rounded-lg px-2 py-1 text-[10px] font-black ${
+                product.price - product.cost < 15
+                  ? "bg-red-500/15 text-red-300"
+                  : product.price - product.cost < 35
+                  ? "bg-yellow-500/15 text-yellow-300"
+                  : "bg-green-500/15 text-green-300"
+              }`}>
+                {product.price - product.cost < 15
+                  ? "Margine basso"
+                  : product.price - product.cost < 35
+                  ? "Margine ok"
+                  : "High profit"}
+              </div>
+              <div className="mt-1 text-[10px] text-zinc-500">
+                AI: €{Math.max(product.price, product.cost * 2.15).toFixed(2)}
+              </div>
+            </td>
                         <td>
                           <span className={`rounded-lg px-3 py-1 text-xs ${
                             product.status === "Online"
@@ -1420,14 +1644,17 @@ useEffect(() => localStorage.setItem("bt-trends", JSON.stringify(trends)), [tren
         )}
 
         {["Inventario", "Da Caricare", "Online", "Venduti", "Ordini da Spedire"].includes(active) && (
-          <ProductsTable title={active} products={visibleProducts} updateProduct={updateProduct} deleteProduct={(id: number) => setProducts((p) => p.filter((x) => x.id !== id))} addProduct={addProduct} uploadProductImage={uploadProductImage} />
+          <>
+            <ProductsTable title={active} products={visibleProducts} updateProduct={updateProduct} deleteProduct={(id: number) => setProducts((p) => p.filter((x) => x.id !== id))} addProduct={addProduct} uploadProductImage={uploadProductImage} generateVintedDraft={generateVintedDraft} />
+            {active === "Ordini da Spedire" && <ShippingKanban products={products} updateProduct={updateProduct} />}
+          </>
         )}
 
         {active === "Fornitori" && <SuppliersSection suppliers={suppliers} setSuppliers={setSuppliers} />}
         {active === "Ordini Fornitori" && <SupplierOrdersSection supplierOrders={supplierOrders} setSupplierOrders={setSupplierOrders} />}
         {active === "Spese" && <ExpensesSection expenses={expenses} setExpenses={setExpenses} expenseCost={stats.expenseCost} selectedDate={selectedDate} />}
         {active === "Statistiche" && <StatsSection stats={stats} products={products} />}
-        {active === "Clienti" && <ClientsSection clients={clients} setClients={setClients} />}
+        {active === "Clienti" && <ClientsSection clients={clients} setClients={setClients} exportClientInvoice={exportClientInvoice} addNotification={addNotification} />}
         {active === "Siti Web" && <SitesSection clients={clients} setClients={setClients} setActive={setActive} />}
         {active === "Generatore Descrizioni" && <DescriptionGenerator />}
         {active === "Ricerca Trend" && (
@@ -1557,7 +1784,7 @@ function AI({ stats, big = false }: any) {
   );
 }
 
-function ProductsTable({ title, products, updateProduct, deleteProduct, addProduct, uploadProductImage }: any) {
+function ProductsTable({ title, products, updateProduct, deleteProduct, addProduct, uploadProductImage, generateVintedDraft }: any) {
   return (
     <Panel className="xl:col-span-3">
       <div className="mb-5 flex items-center justify-between"><h3 className="font-bold">{title}</h3><button onClick={addProduct} className="flex items-center gap-2 rounded-2xl bg-gradient-to-r from-purple-700 to-fuchsia-600 px-4 py-2 text-sm font-bold shadow-lg shadow-purple-700/25 transition hover:-translate-y-0.5 hover:shadow-purple-700/40 hover:bg-purple-600"><Plus size={16} /> Aggiungi Prodotto</button></div>
@@ -1566,7 +1793,17 @@ function ProductsTable({ title, products, updateProduct, deleteProduct, addProdu
           <tr key={product.id} className="rounded-xl border-t border-white/5 transition hover:bg-white/[0.025]">
             <td className="py-3"><div className="flex items-center gap-3"><img src={product.image} alt={product.name} className="h-14 w-14 rounded-xl object-cover" /><div><input value={product.name} onChange={(e) => updateProduct(product.id, "name", e.target.value)} className="w-56 bg-transparent font-bold outline-none" /><input value={product.size} onChange={(e) => updateProduct(product.id, "size", e.target.value)} className="block w-40 bg-transparent text-xs text-zinc-500 outline-none" /></div></div></td>
             <td>
-              <div className="flex min-w-[300px] flex-col gap-2">
+              <div
+                className="flex min-w-[300px] flex-col gap-2 rounded-2xl border border-dashed border-purple-500/25 bg-purple-500/5 p-2"
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  const file = e.dataTransfer.files?.[0];
+                  if (file && uploadProductImage) {
+                    uploadProductImage(product.id, file);
+                  }
+                }}
+              >
                 <label className="inline-flex cursor-pointer items-center justify-center rounded-2xl bg-gradient-to-r from-purple-700 to-fuchsia-600 px-4 py-2 text-xs font-black shadow-lg shadow-purple-700/25 transition hover:-translate-y-0.5">
                   Carica immagine
                   <input
@@ -1594,7 +1831,17 @@ function ProductsTable({ title, products, updateProduct, deleteProduct, addProdu
             <td><input type="number" value={product.price} onChange={(e) => updateProduct(product.id, "price", e.target.value)} className="w-24 rounded-2xl border border-white/10 bg-[#171925]/80 px-4 py-2.5 text-[13px] font-semibold text-zinc-100 shadow-inner shadow-black/20 outline-none transition placeholder:text-zinc-600 hover:border-white/15 focus:border-purple-500/60 focus:bg-[#1b1d2b] focus:ring-2 focus:ring-purple-500/20" /></td>
             <td className="font-bold text-green-400">€{(product.price - product.cost).toFixed(2)}</td>
             <td><select value={product.status} onChange={(e) => updateProduct(product.id, "status", e.target.value)} className="rounded-2xl border border-purple-400/25 bg-gradient-to-r from-purple-700/70 to-fuchsia-700/55 px-4 py-2.5 text-[13px] font-extrabold text-white shadow-lg shadow-purple-900/20 outline-none transition hover:from-purple-600/80 hover:to-fuchsia-600/70 focus:ring-2 focus:ring-purple-500/25"><option>Da Caricare</option><option>Online</option><option>Venduto</option><option>Da Spedire</option></select></td>
-            <td><button onClick={() => deleteProduct(product.id)} className="rounded-lg bg-red-500/20 p-2 text-red-300 hover:bg-red-500/30"><Trash2 size={16} /></button></td>
+            <td>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={() => generateVintedDraft && generateVintedDraft(product)}
+                  className="rounded-xl border border-purple-500/20 bg-purple-500/20 px-3 py-2 text-xs font-black text-purple-200 transition hover:bg-purple-500/30"
+                >
+                  Bozza Vinted
+                </button>
+                <button onClick={() => deleteProduct(product.id)} className="rounded-lg bg-red-500/20 p-2 text-red-300 hover:bg-red-500/30"><Trash2 size={16} /></button>
+              </div>
+            </td>
           </tr>
         ))}
       </tbody></table></div>
@@ -1612,7 +1859,7 @@ function SuppliersSection({ suppliers, setSuppliers }: any) {
             {(["name", "type", "contact", "notes"] as Array<keyof Supplier>).map((field) => field !== "rating" && (
               <td key={field} className={field === "name" ? "py-4" : ""}><input value={String(supplier[field])} onChange={(e) => setSuppliers((prev: Supplier[]) => prev.map((s) => s.id === supplier.id ? { ...s, [field]: e.target.value } : s))} className={`${field === "notes" ? "w-64" : field === "contact" ? "w-56 text-purple-300" : "w-48"} rounded-2xl border border-white/10 bg-[#171925]/80 px-4 py-2.5 text-[13px] font-semibold text-zinc-100 shadow-inner shadow-black/20 outline-none transition placeholder:text-zinc-600 hover:border-white/15 focus:border-purple-500/60 focus:bg-[#1b1d2b] focus:ring-2 focus:ring-purple-500/20 ${field === "name" ? "font-bold" : ""}`} /></td>
             ))}
-            <td><select value={supplier.rating} onChange={(e) => setSuppliers((prev: Supplier[]) => prev.map((s) => s.id === supplier.id ? { ...s, rating: Number(e.target.value) } : s))} className="rounded-lg bg-white/5 px-3 py-2 text-yellow-400 outline-none"><option value={1}>★☆☆☆☆</option><option value={2}>★★☆☆☆</option><option value={3}>★★★☆☆</option><option value={4}>★★★★☆</option><option value={5}>★★★★★</option></select></td>
+            <td><select value={supplier.rating} onChange={(e) => setSuppliers((prev: Supplier[]) => prev.map((s) => s.id === supplier.id ? { ...s, rating: Number(e.target.value) } : s))} className="rounded-xl border border-white/10 bg-[#171925] px-3 py-2 text-yellow-400 outline-none"><option value={1}>★☆☆☆☆</option><option value={2}>★★☆☆☆</option><option value={3}>★★★☆☆</option><option value={4}>★★★★☆</option><option value={5}>★★★★★</option></select></td>
             <td><button onClick={() => setSuppliers((prev: Supplier[]) => prev.filter((s) => s.id !== supplier.id))} className="rounded-xl border border-red-500/20 bg-red-500/20 px-3 py-2 text-red-300 transition hover:bg-red-500/30">Elimina</button></td>
           </tr>
         ))}
@@ -1932,7 +2179,7 @@ function FinanceBox({ label, value, tone }: any) {
   );
 }
 
-function ClientsSection({ clients, setClients }: any) {
+function ClientsSection({ clients, setClients, exportClientInvoice, addNotification }: any) {
   function addClient() {
     setClients((prev: Client[]) => [
       ...prev,
@@ -1953,8 +2200,10 @@ function ClientsSection({ clients, setClients }: any) {
   }
 
   function updateClient(id: number, field: keyof Client, value: string) {
+    const oldClient = clients.find((client: Client) => client.id === id);
+
     setClients((prev: Client[]) =>
-      prev.map((client) =>
+      prev.map((client: Client) =>
         client.id === id
           ? {
               ...client,
@@ -1966,6 +2215,14 @@ function ClientsSection({ clients, setClients }: any) {
           : client
       )
     );
+
+    if (field === "status" && oldClient?.status !== value && addNotification) {
+      addNotification(
+        "Cliente aggiornato",
+        `${oldClient?.name || "Cliente"} ora è ${value}.`,
+        "info"
+      );
+    }
   }
 
   return (
@@ -2061,7 +2318,7 @@ function ClientsSection({ clients, setClients }: any) {
                 onChange={(e) =>
                   updateClient(client.id, "status", e.target.value)
                 }
-                className="rounded-lg bg-purple-700/40 px-3 py-2 text-xs outline-none"
+                className="rounded-xl border border-purple-400/25 bg-[#171925] px-3 py-2 text-xs font-bold text-white outline-none"
               >
                 <option>Venduto</option>
                 <option>Attivo</option>
@@ -2069,12 +2326,20 @@ function ClientsSection({ clients, setClients }: any) {
                 <option>In sviluppo</option>
               </select>
 
-              <button
-                onClick={() => deleteClient(client.id)}
-                className="rounded-xl border border-red-500/20 bg-red-500/20 px-3 py-2 text-xs font-bold text-red-300 transition hover:bg-red-500/30"
-              >
-                Elimina
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => exportClientInvoice && exportClientInvoice(client)}
+                  className="rounded-xl border border-purple-500/20 bg-purple-500/20 px-3 py-2 text-xs font-bold text-purple-200 transition hover:bg-purple-500/30"
+                >
+                  PDF
+                </button>
+                <button
+                  onClick={() => deleteClient(client.id)}
+                  className="rounded-xl border border-red-500/20 bg-red-500/20 px-3 py-2 text-xs font-bold text-red-300 transition hover:bg-red-500/30"
+                >
+                  Elimina
+                </button>
+              </div>
             </div>
           </div>
         ))}
@@ -2354,6 +2619,55 @@ function MiniDashboardCard({ title, value, sub, icon }: any) {
 }
 
 
+
+
+function ShippingKanban({ products, updateProduct }: any) {
+  const columns: Status[] = ["Da Caricare", "Online", "Venduto", "Da Spedire"];
+
+  return (
+    <div className="mt-5 grid grid-cols-1 gap-4 xl:grid-cols-4">
+      {columns.map((status) => (
+        <Panel key={status}>
+          <div className="mb-4 flex items-center justify-between">
+            <h3 className="font-black">{status}</h3>
+            <span className="rounded-full bg-white/10 px-3 py-1 text-xs">
+              {products.filter((product: Product) => product.status === status).length}
+            </span>
+          </div>
+
+          <div className="space-y-3">
+            {products
+              .filter((product: Product) => product.status === status)
+              .slice(0, 8)
+              .map((product: Product) => (
+                <div
+                  key={product.id}
+                  className="rounded-2xl border border-white/10 bg-white/[0.04] p-3"
+                  draggable
+                  onDragStart={(e) => e.dataTransfer.setData("product-id", String(product.id))}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    const id = Number(e.dataTransfer.getData("product-id"));
+                    if (id) updateProduct(id, "status", status);
+                  }}
+                >
+                  <div className="flex items-center gap-3">
+                    <GripVertical size={16} className="text-zinc-500" />
+                    <img src={product.image} alt={product.name} className="h-10 w-10 rounded-xl object-cover" />
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-black">{product.name}</p>
+                      <p className="text-xs text-zinc-500">€{product.price.toFixed(2)}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+          </div>
+        </Panel>
+      ))}
+    </div>
+  );
+}
 
 function AnalyticsPremium({ analyticsData }: any) {
   return (
