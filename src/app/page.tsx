@@ -389,18 +389,31 @@ function loadLS<T>(key: string, fallback: T): T {
 
 export default function HomePage() {
   const [active, setActive] = useState("Dashboard");
-  const [products, setProducts] = useState<Product[]>(defaultProducts);
-  const [clients, setClients] = useState<Client[]>(defaultClients);
-  const [suppliers, setSuppliers] = useState<Supplier[]>(defaultSuppliers);
-  const [supplierOrders, setSupplierOrders] = useState<SupplierOrder[]>(defaultSupplierOrders);
-  const [expenses, setExpenses] = useState<Expense[]>(defaultExpenses);
-  const [trends, setTrends] = useState<TrendItem[]>(defaultTrends);
+  const [products, setProducts] = useState<Product[]>(() =>
+    loadLS("bt-products", defaultProducts)
+  );
+  const [clients, setClients] = useState<Client[]>(() =>
+    loadLS("bt-clients", defaultClients)
+  );
+  const [suppliers, setSuppliers] = useState<Supplier[]>(() =>
+    loadLS("bt-suppliers", defaultSuppliers)
+  );
+  const [supplierOrders, setSupplierOrders] = useState<SupplierOrder[]>(() =>
+    loadLS("bt-supplier-orders", defaultSupplierOrders)
+  );
+  const [expenses, setExpenses] = useState<Expense[]>(() =>
+    loadLS("bt-expenses", defaultExpenses)
+  );
+  const [trends, setTrends] = useState<TrendItem[]>(() =>
+    loadLS("bt-trends", defaultTrends)
+  );
   const [search, setSearch] = useState("");
+  const [trendSearch, setTrendSearch] = useState<string>(() =>
+    loadLS("bt-trend-search", "")
+  );
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
   const [calendarOpen, setCalendarOpen] = useState(false);
-
-  const [trendSearch, setTrendSearch] = useState("");
-  const [vintedResults, setVintedResults] = useState<VintedResult[]>([]);
+const [vintedResults, setVintedResults] = useState<VintedResult[]>([]);
   const [vintedAvgPrice, setVintedAvgPrice] = useState(0);
   const [vintedMinPrice, setVintedMinPrice] = useState(0);
   const [vintedMaxPrice, setVintedMaxPrice] = useState(0);
@@ -408,15 +421,34 @@ export default function HomePage() {
   const [trendError, setTrendError] = useState("");
 
   useEffect(() => {
-    setProducts(loadLS("bt-products", defaultProducts));
-    setClients(loadLS("bt-clients", defaultClients));
-    setSuppliers(loadLS("bt-suppliers", defaultSuppliers));
-    setSupplierOrders(loadLS("bt-supplier-orders", defaultSupplierOrders));
-    setExpenses(loadLS("bt-expenses", defaultExpenses));
-    setTrends(loadLS("bt-trends", defaultTrends));
-  }, []);
+    localStorage.setItem("bt-products", JSON.stringify(products));
+  }, [products]);
 
-  useEffect(() => localStorage.setItem("bt-products", JSON.stringify(products)), [products]);
+  useEffect(() => {
+    localStorage.setItem("bt-clients", JSON.stringify(clients));
+  }, [clients]);
+
+  useEffect(() => {
+    localStorage.setItem("bt-suppliers", JSON.stringify(suppliers));
+  }, [suppliers]);
+
+  useEffect(() => {
+    localStorage.setItem("bt-supplier-orders", JSON.stringify(supplierOrders));
+  }, [supplierOrders]);
+
+  useEffect(() => {
+    localStorage.setItem("bt-expenses", JSON.stringify(expenses));
+  }, [expenses]);
+
+  useEffect(() => {
+    localStorage.setItem("bt-trends", JSON.stringify(trends));
+  }, [trends]);
+
+  useEffect(() => {
+    localStorage.setItem("bt-trend-search", JSON.stringify(trendSearch));
+  }, [trendSearch]);
+
+useEffect(() => localStorage.setItem("bt-products", JSON.stringify(products)), [products]);
   useEffect(() => localStorage.setItem("bt-clients", JSON.stringify(clients)), [clients]);
   useEffect(() => localStorage.setItem("bt-suppliers", JSON.stringify(suppliers)), [suppliers]);
   useEffect(() => localStorage.setItem("bt-supplier-orders", JSON.stringify(supplierOrders)), [supplierOrders]);
