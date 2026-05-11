@@ -77,6 +77,16 @@ type VintedResult = {
   image?: string;
 };
 
+type HotTrend = {
+  query: string;
+  count: number;
+  avgPrice: number;
+  minPrice: number;
+  maxPrice: number;
+  score: number;
+  status: string;
+};
+
 
 
 function buildRecentActivities(
@@ -437,6 +447,8 @@ const [vintedResults, setVintedResults] = useState<VintedResult[]>([]);
   const [vintedMaxPrice, setVintedMaxPrice] = useState(0);
   const [isSearchingTrend, setIsSearchingTrend] = useState(false);
   const [trendError, setTrendError] = useState("");
+  const [hotTrends, setHotTrends] = useState<HotTrend[]>([]);
+  const [isScanningHotTrends, setIsScanningHotTrends] = useState(false);
   const [cloudReady, setCloudReady] = useState(false);
   const [cloudError, setCloudError] = useState("");
 
@@ -691,6 +703,111 @@ useEffect(() => localStorage.setItem("bt-trends", JSON.stringify(trends)), [tren
       setVintedMaxPrice(0);
     } finally {
       setIsSearchingTrend(false);
+    }
+  }
+
+
+  function generateAiSuggestion() {
+    const avg = vintedAvgPrice || 0;
+    const buyBelow = avg * 0.55;
+    const sellPrice = avg > 0 ? avg * 0.92 : 0;
+    const profit = sellPrice - buyBelow;
+
+    if (!avg) {
+      return {
+        title: "Cerca prima un prodotto",
+        text: "Scrivi un prodotto e premi Cerca su Vinted. Poi BLACKTAG ti calcola prezzo, margine e strategia.",
+        tone: "purple",
+      };
+    }
+
+    if (profit >= 30) {
+      return {
+        title: "Trend molto interessante",
+        text: `Compra sotto €${buyBelow.toFixed(2)}, prova a rivendere a €${sellPrice.toFixed(2)}. Margine stimato circa €${profit.toFixed(2)}.`,
+        tone: "green",
+      };
+    }
+
+    if (profit >= 15) {
+      return {
+        title: "Trend discreto",
+        text: `Il margine c'è, ma devi comprare bene. Target acquisto: €${buyBelow.toFixed(2)}.`,
+        tone: "yellow",
+      };
+    }
+
+    return {
+      title: "Margine basso",
+      text: "Questo prodotto non sembra fortissimo ora. Cerca un brand o modello più specifico.",
+      tone: "red",
+    };
+  }
+
+  async function scanHotVintedTrends() {
+    const keywords = [
+      "nike tech fleece",
+      "adidas samba",
+      "stone island",
+      "north face jacket",
+      "carhartt cargo",
+      "ralph lauren polo",
+      "new balance 550",
+      "nike dunk",
+      "moncler jacket",
+      "cp company",
+    ];
+
+    try {
+      setIsScanningHotTrends(true);
+      setTrendError("");
+
+      const results = await Promise.all(
+        keywords.map(async (keyword) => {
+          const response = await fetch("/api/trends", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ query: keyword }),
+          });
+
+          const data = await response.json();
+
+          const count = Number(data.count || 0);
+          const avgPrice = Number(data.avgPrice || 0);
+          const minPrice = Number(data.minPrice || 0);
+          const maxPrice = Number(data.maxPrice || 0);
+
+          const spread = Math.max(0, maxPrice - minPrice);
+          const score = Math.round(count * 8 + avgPrice * 0.7 + spread * 0.45);
+
+          const status =
+            score >= 130
+              ? "🔥 Hot"
+              : score >= 85
+              ? "📈 Sta salendo"
+              : score >= 45
+              ? "🟡 Stabile"
+              : "🔻 Debole";
+
+          return {
+            query: keyword,
+            count,
+            avgPrice,
+            minPrice,
+            maxPrice,
+            score,
+            status,
+          };
+        })
+      );
+
+      setHotTrends(results.sort((a, b) => b.score - a.score));
+    } catch (error: any) {
+      setTrendError(error?.message || "Errore scansione trend");
+    } finally {
+      setIsScanningHotTrends(false);
     }
   }
 
@@ -1114,6 +1231,10 @@ useEffect(() => localStorage.setItem("bt-trends", JSON.stringify(trends)), [tren
             isSearchingTrend={isSearchingTrend}
             trendError={trendError}
             searchVintedTrend={searchVintedTrend}
+            hotTrends={hotTrends}
+            isScanningHotTrends={isScanningHotTrends}
+            scanHotVintedTrends={scanHotVintedTrends}
+            aiSuggestion={generateAiSuggestion()}
           />
         )}
         {active === "AI Assistant" && <AI stats={stats} big />}
@@ -1767,7 +1888,7 @@ function DescriptionGenerator() {
   );
 }
 
-function TrendSearchSection({ trends, setTrends, trendSearch, setTrendSearch, vintedResults, vintedAvgPrice, vintedMinPrice, vintedMaxPrice, isSearchingTrend, trendError, searchVintedTrend }: any) {
+function TrendSearchSection({ trends, setTrends, trendSearch, setTrendSearch, vintedResults, vintedAvgPrice, vintedMinPrice, vintedMaxPrice, isSearchingTrend, trendError, searchVintedTrend, hotTrends, isScanningHotTrends, scanHotVintedTrends, aiSuggestion }: any) {
   return (
     <Panel>
       <div className="mb-5 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
@@ -1785,6 +1906,87 @@ function TrendSearchSection({ trends, setTrends, trendSearch, setTrendSearch, vi
         <Metric title="Compra Sotto" value={`€${(vintedAvgPrice * 0.55).toFixed(2)}`} tone="yellow" />
         <Metric title="Range Prezzi" value={`€${vintedMinPrice.toFixed(2)} - €${vintedMaxPrice.toFixed(2)}`} tone="blue" />
       </div>
+      <div className="mb-6 grid grid-cols-1 gap-4 xl:grid-cols-3">
+        <div className={`rounded-[24px] border p-5 ${
+          aiSuggestion?.tone === "green"
+            ? "border-green-500/20 bg-green-500/10"
+            : aiSuggestion?.tone === "yellow"
+            ? "border-yellow-500/20 bg-yellow-500/10"
+            : aiSuggestion?.tone === "red"
+            ? "border-red-500/20 bg-red-500/10"
+            : "border-purple-500/20 bg-purple-500/10"
+        }`}>
+          <div className="mb-3 flex items-center gap-2">
+            <Sparkles size={18} className="text-fuchsia-300" />
+            <h4 className="font-black">AI Resell Advisor</h4>
+          </div>
+          <p className="text-sm font-bold">{aiSuggestion?.title}</p>
+          <p className="mt-2 text-sm text-zinc-300">{aiSuggestion?.text}</p>
+        </div>
+
+        <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
+          <p className="text-xs uppercase tracking-wide text-zinc-500">Prezzo consigliato vendita</p>
+          <h3 className="mt-2 text-3xl font-black text-green-300">
+            €{vintedAvgPrice > 0 ? (vintedAvgPrice * 0.92).toFixed(2) : "0.00"}
+          </h3>
+          <p className="mt-2 text-sm text-zinc-400">Basato sulla media Vinted rilevata.</p>
+        </div>
+
+        <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
+          <p className="text-xs uppercase tracking-wide text-zinc-500">Margine target</p>
+          <h3 className="mt-2 text-3xl font-black text-fuchsia-300">
+            €{vintedAvgPrice > 0 ? ((vintedAvgPrice * 0.92) - (vintedAvgPrice * 0.55)).toFixed(2) : "0.00"}
+          </h3>
+          <p className="mt-2 text-sm text-zinc-400">Se compri sotto il 55% della media.</p>
+        </div>
+      </div>
+
+      <div className="mb-6 rounded-[28px] border border-purple-500/20 bg-purple-500/10 p-5">
+        <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h4 className="text-xl font-black">Scanner prodotti hot Vinted</h4>
+            <p className="text-sm text-zinc-400">
+              Analizza più ricerche e ordina quelle con score migliore.
+            </p>
+          </div>
+
+          <button
+            onClick={scanHotVintedTrends}
+            disabled={isScanningHotTrends}
+            className="rounded-2xl bg-gradient-to-r from-purple-700 to-fuchsia-600 px-5 py-3 text-sm font-black shadow-lg shadow-purple-700/30 transition hover:-translate-y-0.5 disabled:opacity-60"
+          >
+            {isScanningHotTrends ? "Scannerizzo..." : "Trova trend hot"}
+          </button>
+        </div>
+
+        {hotTrends?.length > 0 && (
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+            {hotTrends.map((item: HotTrend) => (
+              <button
+                key={item.query}
+                onClick={() => setTrendSearch(item.query)}
+                className="rounded-2xl border border-white/10 bg-[#0d1020]/80 p-4 text-left transition hover:-translate-y-1 hover:border-fuchsia-500/30"
+              >
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <b className="truncate text-sm capitalize">{item.query}</b>
+                  <span className="rounded-lg bg-white/10 px-2 py-1 text-[10px]">
+                    {item.score}
+                  </span>
+                </div>
+
+                <p className="text-xs text-zinc-400">{item.status}</p>
+                <p className="mt-2 text-sm text-green-300">
+                  Media €{item.avgPrice.toFixed(2)}
+                </p>
+                <p className="text-xs text-zinc-500">
+                  {item.count} risultati · range €{item.minPrice.toFixed(0)}-€{item.maxPrice.toFixed(0)}
+                </p>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
       {vintedResults.length > 0 && <div className="mb-8 grid gap-4 md:grid-cols-3 xl:grid-cols-4">{vintedResults.map((item: VintedResult, index: number) => <div key={index} className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">{item.image && <img src={item.image} alt={item.title} className="mb-4 h-48 w-full rounded-xl object-cover" />}<h4 className="min-h-[40px] font-black">{item.title}</h4><p className="mt-2 text-2xl font-black text-green-400">€{Number(item.price).toFixed(2)}</p><p className="mt-2 text-sm text-zinc-400">Margine stimato comprando a metà prezzo: €{(Number(item.price) * 0.45).toFixed(2)}</p>{item.url && <a href={item.url} target="_blank" rel="noreferrer" className="mt-4 inline-block rounded-2xl bg-gradient-to-r from-purple-700 to-fuchsia-600 px-4 py-2 text-sm font-bold shadow-lg shadow-purple-700/25 transition hover:-translate-y-0.5 hover:shadow-purple-700/40 hover:bg-purple-600">Apri su Vinted</a>}</div>)}</div>}
       <h4 className="mb-3 text-lg font-black">Trend Manuali</h4>
       <EditableTrendTable trends={trends} setTrends={setTrends} />
