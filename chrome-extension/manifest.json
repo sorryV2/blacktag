@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "BLACKTAG Vinted Assistant",
+  "version": "1.0",
+  "description": "Autofill Vinted listings from BLACKTAG.",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://www.vinted.it/*"
+  ],
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.vinted.it/*"],
+      "js": ["content.js"]
+    }
+  ]
+}

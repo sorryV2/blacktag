@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <title>BLACKTAG</title>
+  <style>
+    body {
+      width: 320px;
+      background: #0b0b12;
+      color: white;
+      font-family: Arial, sans-serif;
+      padding: 16px;
+    }
+
+    h1 {
+      font-size: 20px;
+      margin-bottom: 16px;
+      color: #c084fc;
+    }
+
+    input,
+    textarea {
+      width: 100%;
+      margin-bottom: 12px;
+      padding: 10px;
+      border-radius: 12px;
+      border: 1px solid #27272a;
+      background: #18181b;
+      color: white;
+      box-sizing: border-box;
+    }
+
+    button {
+      width: 100%;
+      padding: 12px;
+      border: none;
+      border-radius: 12px;
+      background: linear-gradient(90deg, #7c3aed, #d946ef);
+      color: white;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    button:hover {
+      opacity: 0.9;
+    }
+  </style>
+</head>
+<body>
+  <h1>BLACKTAG</h1>
+
+  <input id="title" placeholder="Titolo prodotto" />
+
+  <textarea id="description" rows="5" placeholder="Descrizione"></textarea>
+
+  <input id="price" placeholder="Prezzo" />
+
+  <button id="fillBtn">Compila Vinted</button>
+
+  <script src="popup.js"></script>
+</body>
+</html>
