@@ -629,9 +629,12 @@ const [vintedResults, setVintedResults] = useState<VintedResult[]>([]);
 
     const cleanRows = removeEmptyRows(rows);
 
-    // Non cancelliamo più tutta la tabella prima di salvare.
-    // Prima c'era delete + insert: se un dispositivo ricaricava con stato vuoto,
-    // poteva svuotare Supabase. Ora facciamo solo upsert sicuro.
+    if (table === "suppliers" && cleanRows.length === 0) {
+      const deleteResult = await supabase.from(table).delete().neq("id", 0);
+      if (deleteResult.error) throw deleteResult.error;
+      return;
+    }
+
     if (cleanRows.length > 0) {
       const upsertResult = await supabase
         .from(table)
@@ -852,9 +855,9 @@ useEffect(() => localStorage.setItem("bt-trends", JSON.stringify(trends)), [tren
     setMobileMenu(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
 
-    if (supabase) {
-      refreshCloudData();
-    }
+    // Non sincronizzare automaticamente al cambio pagina.
+    // Prima sovrascriveva lo stato locale con Supabase vecchio/vuoto.
+    // Usa il tasto Sync solo quando vuoi ricaricare manualmente dal cloud.
   }
 
   const visibleProducts = products
@@ -866,6 +869,39 @@ useEffect(() => localStorage.setItem("bt-trends", JSON.stringify(trends)), [tren
       return true;
     })
     .filter((p) => `${p.name} ${p.brand} ${p.size}`.toLowerCase().includes(search.toLowerCase()));
+
+  async function deleteProduct(id: number) {
+    setProducts((prev) => prev.filter((product) => product.id !== id));
+
+    if (!supabase) return;
+
+    const result = await supabase.from("products").delete().eq("id", id);
+    if (result.error) {
+      setCloudError(result.error.message || "Errore eliminazione prodotto");
+    }
+  }
+
+  async function deleteSupplier(id: number) {
+    setSuppliers((prev) => prev.filter((supplier) => supplier.id !== id));
+
+    if (!supabase) return;
+
+    const result = await supabase.from("suppliers").delete().eq("id", id);
+    if (result.error) {
+      setCloudError(result.error.message || "Errore eliminazione fornitore");
+    }
+  }
+
+  async function deleteClient(id: number) {
+    setClients((prev) => prev.filter((client) => client.id !== id));
+
+    if (!supabase) return;
+
+    const result = await supabase.from("clients").delete().eq("id", id);
+    if (result.error) {
+      setCloudError(result.error.message || "Errore eliminazione cliente");
+    }
+  }
 
   function updateProduct(id: number, field: keyof Product, value: string) {
     const oldProduct = products.find((product) => product.id === id);
@@ -899,20 +935,23 @@ useEffect(() => localStorage.setItem("bt-trends", JSON.stringify(trends)), [tren
     }
   }
 
-  async function deleteSupplier(id: number) {
-    setSuppliers((prev) => prev.filter((supplier) => supplier.id !== id));
-
-    if (!supabase) return;
-
-    const result = await supabase.from("suppliers").delete().eq("id", id);
-
-    if (result.error) {
-      setCloudError(result.error.message || "Errore eliminazione fornitore");
-    }
-  }
-
   function addProduct() {
-    setProducts((prev) => [...prev, { id: Date.now(), name: "Nuovo prodotto", brand: "Brand", size: "Taglia", image: imageList[Math.floor(Math.random() * imageList.length)], cost: 0, price: 0, status: "Da Caricare" }]);
+    const id = Date.now();
+
+    setProducts((prev) => [
+      ...prev,
+      {
+        id,
+        name: "Nuovo prodotto",
+        brand: "Brand",
+        size: "Taglia",
+        image: imageList[0],
+        cost: 0,
+        price: 0,
+        status: "Da Caricare",
+      },
+    ]);
+
     setActive("Inventario");
   }
 
@@ -1665,7 +1704,7 @@ async function uploadProductImage(productId: number, file: File) {
 
         {["Inventario", "Da Caricare", "Online", "Venduti", "Ordini da Spedire"].includes(active) && (
           <>
-            <ProductsTable title={active} products={visibleProducts} updateProduct={updateProduct} deleteProduct={(id: number) => { setProducts((p) => p.filter((x) => x.id !== id)); deleteFromSupabase("products", id); }} addProduct={addProduct} uploadProductImage={uploadProductImage} generateVintedDraft={generateVintedDraft} />
+            <ProductsTable title={active} products={visibleProducts} updateProduct={updateProduct} deleteProduct={deleteProduct} addProduct={addProduct} uploadProductImage={uploadProductImage} generateVintedDraft={generateVintedDraft} />
             {active === "Ordini da Spedire" && <ShippingKanban products={products} updateProduct={updateProduct} />}
           </>
         )}
@@ -1675,7 +1714,7 @@ async function uploadProductImage(productId: number, file: File) {
         {active === "Ordini Fornitori" && <SupplierOrdersSection supplierOrders={supplierOrders} setSupplierOrders={setSupplierOrders} />}
         {active === "Spese" && <ExpensesSection expenses={expenses} setExpenses={setExpenses} expenseCost={stats.expenseCost} selectedDate={selectedDate} />}
         {active === "Statistiche" && <StatsSection stats={stats} products={products} />}
-        {active === "Clienti" && <CRMProSection clients={clients} setClients={setClients} exportClientInvoice={exportClientInvoice} addNotification={addNotification} />}
+        {active === "Clienti" && <CRMProSection clients={clients} setClients={setClients} exportClientInvoice={exportClientInvoice} addNotification={addNotification} deleteClient={deleteClient} />}
         {active === "Siti Web" && <SitesSection clients={clients} setClients={setClients} setActive={setActive} />}
         {active === "Generatore Descrizioni" && <DescriptionGenerator />}
         {active === "Ricerca Trend" && (
@@ -2302,7 +2341,7 @@ function FinanceBox({ label, value, tone }: any) {
   );
 }
 
-function ClientsSection({ clients, setClients, exportClientInvoice, addNotification }: any) {
+function ClientsSection({ clients, setClients, exportClientInvoice, addNotification, deleteClientCloud }: any) {
   function addClient() {
     setClients((prev: Client[]) => [
       ...prev,
@@ -2316,10 +2355,6 @@ function ClientsSection({ clients, setClients, exportClientInvoice, addNotificat
         status: "Da contattare",
       },
     ]);
-  }
-
-  function deleteClient(id: number) {
-    setClients((prev: Client[]) => prev.filter((client) => client.id !== id));
   }
 
   function updateClient(id: number, field: keyof Client, value: string) {
@@ -2457,7 +2492,7 @@ function ClientsSection({ clients, setClients, exportClientInvoice, addNotificat
                   PDF
                 </button>
                 <button
-                  onClick={() => deleteClient(client.id)}
+                  onClick={() => deleteClientCloud ? deleteClientCloud(client.id) : setClients((prev: Client[]) => prev.filter((c) => c.id !== client.id))}
                   className="rounded-xl border border-red-500/20 bg-red-500/20 px-3 py-2 text-xs font-bold text-red-300 transition hover:bg-red-500/30"
                 >
                   Elimina
@@ -2484,7 +2519,7 @@ function crmDaysUntil(dateText?: string) {
   return Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 }
 
-function CRMProSection({ clients, setClients, exportClientInvoice, addNotification }: any) {
+function CRMProSection({ clients, setClients, exportClientInvoice, addNotification, deleteClient }: any) {
   const activeClients = clients.filter((client: Client) => client.status === "Attivo" || client.status === "Venduto");
   const totalMonthly = activeClients.reduce((sum: number, client: Client) => sum + Number(client.monthly || 0), 0);
   const totalPaid = clients.reduce((sum: number, client: Client) => sum + Number(client.paid || 0), 0);
@@ -2515,10 +2550,6 @@ function CRMProSection({ clients, setClients, exportClientInvoice, addNotificati
         notes: "",
       },
     ]);
-  }
-
-  function deleteClient(id: number) {
-    setClients((prev: Client[]) => prev.filter((client) => client.id !== id));
   }
 
   function updateClient(id: number, field: keyof Client, value: string) {
