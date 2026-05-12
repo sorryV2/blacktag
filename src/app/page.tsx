@@ -624,6 +624,33 @@ const [vintedResults, setVintedResults] = useState<VintedResult[]>([]);
     refreshCloudData();
   }, []);
 
+  async function syncLocalToCloud() {
+    if (!supabase) {
+      setCloudReady(true);
+      return;
+    }
+
+    try {
+      setIsSyncingCloud(true);
+      setCloudError("");
+
+      await Promise.all([
+        replaceSupabaseTable("products", products),
+        replaceSupabaseTable("clients", clients),
+        replaceSupabaseTable("suppliers", suppliers),
+        replaceSupabaseTable("supplier_orders", supplierOrders),
+        replaceSupabaseTable("expenses", expenses),
+      ]);
+
+      setCloudReady(true);
+      addNotification("Sync completato", "Dati salvati su Supabase.", "success");
+    } catch (error: any) {
+      setCloudError(error?.message || "Errore salvataggio su Supabase");
+    } finally {
+      setIsSyncingCloud(false);
+    }
+  }
+
   async function replaceSupabaseTable(table: string, rows: any[]) {
     if (!supabase || !cloudReady) return;
 
@@ -1408,11 +1435,11 @@ async function uploadProductImage(productId: number, file: File) {
             </button>
 
             <button
-              onClick={refreshCloudData}
+              onClick={syncLocalToCloud}
               disabled={isSyncingCloud}
               className="hidden rounded-2xl border border-white/10 bg-white/[0.055] px-4 py-3 text-sm font-black text-zinc-200 shadow-xl shadow-black/20 transition hover:border-purple-500/40 hover:bg-white/[0.08] disabled:opacity-60 md:block"
             >
-              {isSyncingCloud ? "Sync..." : "🔄 Sync"}
+              {isSyncingCloud ? "Salvo..." : "🔄 Salva"}
             </button>
 
             <CalendarPicker
@@ -1777,12 +1804,12 @@ async function uploadProductImage(productId: number, file: File) {
           ))}
 
           <button
-            onClick={refreshCloudData}
+            onClick={syncLocalToCloud}
             disabled={isSyncingCloud}
             className="flex flex-col items-center gap-1 rounded-2xl px-2 py-2 text-[10px] font-bold text-zinc-400 disabled:opacity-60"
           >
             <span className="text-[17px]">🔄</span>
-            <span className="truncate">Sync</span>
+            <span className="truncate">Salva</span>
           </button>
         </div>
       </section>
