@@ -628,10 +628,17 @@ const [vintedResults, setVintedResults] = useState<VintedResult[]>([]);
     if (!supabase || !cloudReady) return;
 
     const cleanRows = removeEmptyRows(rows);
+    const replaceTables = ["products", "clients", "suppliers", "supplier_orders", "expenses"];
 
-    if (table === "suppliers" && cleanRows.length === 0) {
+    if (replaceTables.includes(table)) {
       const deleteResult = await supabase.from(table).delete().neq("id", 0);
       if (deleteResult.error) throw deleteResult.error;
+
+      if (cleanRows.length > 0) {
+        const insertResult = await supabase.from(table).insert(cleanRows);
+        if (insertResult.error) throw insertResult.error;
+      }
+
       return;
     }
 
