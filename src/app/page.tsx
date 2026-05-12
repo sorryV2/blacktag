@@ -353,58 +353,7 @@ function getConicGradient(categories: { name: string; percent: number; color: st
 }
 
 
-const defaultProducts: Product[] = [
-  {
-    id: 1,
-    name: "Nike Tech Fleece Hoodie",
-    brand: "Nike",
-    size: "Nero · M",
-    image: "https://images.unsplash.com/photo-1556821840-3a63f95609a7?q=80&w=400&auto=format&fit=crop",
-    cost: 45,
-    price: 89.99,
-    status: "Online",
-  },
-  {
-    id: 2,
-    name: "Stone Island Sweatshirt",
-    brand: "Stone Island",
-    size: "Navy · L",
-    image: "https://images.unsplash.com/photo-1578587018452-892bacefd3f2?q=80&w=400&auto=format&fit=crop",
-    cost: 55,
-    price: 119.99,
-    status: "Venduto",
-  },
-  {
-    id: 3,
-    name: "The North Face Jacket",
-    brand: "The North Face",
-    size: "Black · M",
-    image: "https://images.unsplash.com/photo-1543076447-215ad9ba6923?q=80&w=400&auto=format&fit=crop",
-    cost: 60,
-    price: 129.99,
-    status: "Online",
-  },
-  {
-    id: 4,
-    name: "Carhartt WIP Pants",
-    brand: "Carhartt",
-    size: "Beige · 32",
-    image: "https://images.unsplash.com/photo-1473966968600-fa801b869a1a?q=80&w=400&auto=format&fit=crop",
-    cost: 35,
-    price: 69.99,
-    status: "Da Caricare",
-  },
-  {
-    id: 5,
-    name: "Adidas Samba OG",
-    brand: "Adidas",
-    size: "White · 42",
-    image: "https://images.unsplash.com/photo-1542291026-7eec264c27ff?q=80&w=400&auto=format&fit=crop",
-    cost: 40,
-    price: 79.99,
-    status: "Da Spedire",
-  },
-];
+const defaultProducts: Product[] = [];
 
 const defaultClients: Client[] = [
   { id: 1, name: "Ristorante Milano", business: "Ristorante", monthly: 150, paid: 900, site: "ristorantemilano.it", status: "Attivo" },
@@ -412,44 +361,19 @@ const defaultClients: Client[] = [
   { id: 3, name: "Bar Centrale", business: "Bar", monthly: 120, paid: 240, site: "barcentrale.it", status: "Da contattare" },
 ];
 
-const defaultSuppliers: Supplier[] = [
-  { id: 1, name: "Alibaba Supplier", type: "Wholesale", contact: "alibaba.com", rating: 4, notes: "Buono per ordini grossi" },
-  { id: 2, name: "Yupoo Seller", type: "Streetwear", contact: "yupoo link", rating: 5, notes: "Ottima qualità hoodie" },
-  { id: 3, name: "Agent Warehouse", type: "Agent", contact: "dashboard agent", rating: 4, notes: "Utile per spedizioni" },
-];
+const defaultSuppliers: Supplier[] = [];
 
-const defaultSupplierOrders: SupplierOrder[] = [
-  { id: 1, code: "#HAUL001", supplier: "Yupoo Seller", products: "Nike Tech, Stone Island", cost: 185, tracking: "YT239842IT", status: "In transito", eta: "7 giorni" },
-  { id: 2, code: "#HAUL002", supplier: "Alibaba Supplier", products: "Pantaloni cargo x8", cost: 224, tracking: "ALB88291", status: "Warehouse", eta: "12 giorni" },
-];
+const defaultSupplierOrders: SupplierOrder[] = [];
 
-const defaultTrackingOrders: TrackingOrder[] = [
-  {
-    id: 1,
-    productName: "Nike Tech Fleece Hoodie",
-    platform: "Vinted",
-    buyer: "utente_vinted",
-    salePrice: 89.99,
-    shippingCost: 4.99,
-    tracking: "Da inserire",
-    courier: "Poste Italiane",
-    status: "Da spedire",
-    shipDate: new Date().toISOString().slice(0, 10),
-    notes: "Preparare pacco",
-  },
-];
+const defaultTrackingOrders: TrackingOrder[] = [];
 
-const defaultExpenses: Expense[] = [
-  { id: 1, name: "Haul Maggio", category: "Prodotti", amount: 185, date: "2025-05-24" },
-  { id: 2, name: "Dominio cliente", category: "Siti Web", amount: 12, date: "2025-05-20" },
-];
+const defaultExpenses: Expense[] = [];
 
-const defaultTrends: TrendItem[] = [
-  { id: 1, product: "Tech Fleece Hoodie", brand: "Nike", buyPrice: 45, avgSellPrice: 90, demand: 8, notes: "Molto cercato, buon margine" },
-  { id: 2, product: "Samba OG", brand: "Adidas", buyPrice: 40, avgSellPrice: 80, demand: 7, notes: "Sempre richieste" },
-];
+const defaultTrends: TrendItem[] = [];
 
-const imageList = defaultProducts.map((p) => p.image);
+const imageList = [
+  "https://images.unsplash.com/photo-1556821840-3a63f95609a7?q=80&w=400&auto=format&fit=crop",
+];
 
 const menuGroups = [
   { title: "", items: [["Dashboard", Home]] },
@@ -468,6 +392,12 @@ const supabase =
   supabaseUrl && supabaseAnonKey
     ? createClient(supabaseUrl, supabaseAnonKey)
     : null;
+
+async function deleteCloudRow(table: string, id: number) {
+  if (!supabase) return;
+
+  await supabase.from(table).delete().eq("id", id);
+}
 
 function removeEmptyRows<T extends { id: number }>(rows: T[]) {
   return rows.filter((row) => row && row.id);
@@ -2033,7 +1963,7 @@ function SuppliersSection({ suppliers, setSuppliers }: any) {
               <td key={field} className={field === "name" ? "py-4" : ""}><input value={String(supplier[field])} onChange={(e) => setSuppliers((prev: Supplier[]) => prev.map((s) => s.id === supplier.id ? { ...s, [field]: e.target.value } : s))} className={`${field === "notes" ? "w-64" : field === "contact" ? "w-56 text-purple-300" : "w-48"} rounded-2xl border border-white/10 bg-[#171925]/80 px-4 py-2.5 text-[13px] font-semibold text-zinc-100 shadow-inner shadow-black/20 outline-none transition placeholder:text-zinc-600 hover:border-white/15 focus:border-purple-500/60 focus:bg-[#1b1d2b] focus:ring-2 focus:ring-purple-500/20 ${field === "name" ? "font-bold" : ""}`} /></td>
             ))}
             <td><select value={supplier.rating} onChange={(e) => setSuppliers((prev: Supplier[]) => prev.map((s) => s.id === supplier.id ? { ...s, rating: Number(e.target.value) } : s))} className="rounded-xl border border-white/10 bg-[#171925] px-3 py-2 text-yellow-400 outline-none"><option value={1}>★☆☆☆☆</option><option value={2}>★★☆☆☆</option><option value={3}>★★★☆☆</option><option value={4}>★★★★☆</option><option value={5}>★★★★★</option></select></td>
-            <td><button onClick={() => { setSuppliers((prev: Supplier[]) => prev.filter((s) => s.id !== supplier.id)); }} className="rounded-xl border border-red-500/20 bg-red-500/20 px-3 py-2 text-red-300 transition hover:bg-red-500/30">Elimina</button></td>
+            <td><button onClick={() => { setSuppliers((prev: Supplier[]) => prev.filter((s) => s.id !== supplier.id)); deleteCloudRow("suppliers", supplier.id); }} className="rounded-xl border border-red-500/20 bg-red-500/20 px-3 py-2 text-red-300 transition hover:bg-red-500/30">Elimina</button></td>
           </tr>
         ))}
       </tbody></table></div>
