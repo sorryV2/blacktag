@@ -691,6 +691,14 @@ const [vintedResults, setVintedResults] = useState<VintedResult[]>([]);
   }, [suppliers]);
 
   useEffect(() => {
+    if (!cloudReady) return;
+
+    replaceSupabaseTable("suppliers", suppliers).catch((error) =>
+      setCloudError(error?.message || "Errore salvataggio fornitori")
+    );
+  }, [suppliers, cloudReady]);
+
+  useEffect(() => {
     localStorage.setItem("bt-supplier-orders", JSON.stringify(supplierOrders));
   }, [supplierOrders]);
 
@@ -888,6 +896,18 @@ useEffect(() => localStorage.setItem("bt-trends", JSON.stringify(trends)), [tren
     const result = await supabase.from(table).delete().eq("id", id);
     if (result.error) {
       setCloudError(result.error.message || "Errore eliminazione cloud");
+    }
+  }
+
+  async function deleteSupplier(id: number) {
+    setSuppliers((prev) => prev.filter((supplier) => supplier.id !== id));
+
+    if (!supabase) return;
+
+    const result = await supabase.from("suppliers").delete().eq("id", id);
+
+    if (result.error) {
+      setCloudError(result.error.message || "Errore eliminazione fornitore");
     }
   }
 
@@ -1651,7 +1671,7 @@ async function uploadProductImage(productId: number, file: File) {
         )}
 
         {active === "Tracking Ordini" && <TrackingOrdersSection orders={trackingOrders} setOrders={setTrackingOrders} />}
-        {active === "Fornitori" && <SuppliersSection suppliers={suppliers} setSuppliers={setSuppliers} />}
+        {active === "Fornitori" && <SuppliersSection suppliers={suppliers} setSuppliers={setSuppliers} deleteSupplier={deleteSupplier} />}
         {active === "Ordini Fornitori" && <SupplierOrdersSection supplierOrders={supplierOrders} setSupplierOrders={setSupplierOrders} />}
         {active === "Spese" && <ExpensesSection expenses={expenses} setExpenses={setExpenses} expenseCost={stats.expenseCost} selectedDate={selectedDate} />}
         {active === "Statistiche" && <StatsSection stats={stats} products={products} />}
@@ -1952,7 +1972,7 @@ function TrackingOrdersSection({ orders, setOrders }: any) {
   );
 }
 
-function SuppliersSection({ suppliers, setSuppliers }: any) {
+function SuppliersSection({ suppliers, setSuppliers, deleteSupplier }: any) {
   return (
     <Panel>
       <div className="mb-5 flex items-center justify-between"><div><h3 className="text-xl font-black">Fornitori</h3><p className="text-sm text-zinc-400">Gestisci seller, agent, contatti e note.</p></div><button onClick={() => setSuppliers((prev: Supplier[]) => [...prev, { id: Date.now(), name: "Nuovo fornitore", type: "Tipo", contact: "link o contatto", rating: 3, notes: "" }])} className="rounded-2xl bg-gradient-to-r from-purple-700 to-fuchsia-600 px-4 py-2 text-sm font-bold shadow-lg shadow-purple-700/25 transition hover:-translate-y-0.5 hover:shadow-purple-700/40">+ Aggiungi Fornitore</button></div>
@@ -1963,7 +1983,7 @@ function SuppliersSection({ suppliers, setSuppliers }: any) {
               <td key={field} className={field === "name" ? "py-4" : ""}><input value={String(supplier[field])} onChange={(e) => setSuppliers((prev: Supplier[]) => prev.map((s) => s.id === supplier.id ? { ...s, [field]: e.target.value } : s))} className={`${field === "notes" ? "w-64" : field === "contact" ? "w-56 text-purple-300" : "w-48"} rounded-2xl border border-white/10 bg-[#171925]/80 px-4 py-2.5 text-[13px] font-semibold text-zinc-100 shadow-inner shadow-black/20 outline-none transition placeholder:text-zinc-600 hover:border-white/15 focus:border-purple-500/60 focus:bg-[#1b1d2b] focus:ring-2 focus:ring-purple-500/20 ${field === "name" ? "font-bold" : ""}`} /></td>
             ))}
             <td><select value={supplier.rating} onChange={(e) => setSuppliers((prev: Supplier[]) => prev.map((s) => s.id === supplier.id ? { ...s, rating: Number(e.target.value) } : s))} className="rounded-xl border border-white/10 bg-[#171925] px-3 py-2 text-yellow-400 outline-none"><option value={1}>★☆☆☆☆</option><option value={2}>★★☆☆☆</option><option value={3}>★★★☆☆</option><option value={4}>★★★★☆</option><option value={5}>★★★★★</option></select></td>
-            <td><button onClick={() => { setSuppliers((prev: Supplier[]) => prev.filter((s) => s.id !== supplier.id)); deleteCloudRow("suppliers", supplier.id); }} className="rounded-xl border border-red-500/20 bg-red-500/20 px-3 py-2 text-red-300 transition hover:bg-red-500/30">Elimina</button></td>
+            <td><button onClick={() => deleteSupplier(supplier.id)} className="rounded-xl border border-red-500/20 bg-red-500/20 px-3 py-2 text-red-300 transition hover:bg-red-500/30">Elimina</button></td>
           </tr>
         ))}
       </tbody></table></div>
