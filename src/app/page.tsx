@@ -611,22 +611,26 @@ const [vintedResults, setVintedResults] = useState<VintedResult[]>([]);
         clientsResult,
         expensesResult,
         supplierOrdersResult,
+        suppliersResult,
       ] = await Promise.all([
         supabase.from("products").select("*").order("id", { ascending: true }),
         supabase.from("clients").select("*").order("id", { ascending: true }),
         supabase.from("expenses").select("*").order("id", { ascending: true }),
         supabase.from("supplier_orders").select("*").order("id", { ascending: true }),
+        supabase.from("suppliers").select("*").order("id", { ascending: true }),
       ]);
 
       if (productsResult.error) throw productsResult.error;
       if (clientsResult.error) throw clientsResult.error;
       if (expensesResult.error) throw expensesResult.error;
       if (supplierOrdersResult.error) throw supplierOrdersResult.error;
+      if (suppliersResult.error) throw suppliersResult.error;
 
-      setProducts((productsResult.data || defaultProducts) as Product[]);
-      setClients((clientsResult.data || defaultClients) as Client[]);
-      setExpenses((expensesResult.data || defaultExpenses) as Expense[]);
-      setSupplierOrders((supplierOrdersResult.data || defaultSupplierOrders) as SupplierOrder[]);
+      if (productsResult.data) setProducts(productsResult.data as Product[]);
+      if (clientsResult.data) setClients(clientsResult.data as Client[]);
+      if (expensesResult.data) setExpenses(expensesResult.data as Expense[]);
+      if (supplierOrdersResult.data) setSupplierOrders(supplierOrdersResult.data as SupplierOrder[]);
+      if (suppliersResult.data) setSuppliers(suppliersResult.data as Supplier[]);
 
       setCloudReady(true);
     } catch (error: any) {
@@ -646,12 +650,15 @@ const [vintedResults, setVintedResults] = useState<VintedResult[]>([]);
 
     const cleanRows = removeEmptyRows(rows);
 
-    const deleteResult = await supabase.from(table).delete().neq("id", 0);
-    if (deleteResult.error) throw deleteResult.error;
-
+    // Non cancelliamo più tutta la tabella prima di salvare.
+    // Prima c'era delete + insert: se un dispositivo ricaricava con stato vuoto,
+    // poteva svuotare Supabase. Ora facciamo solo upsert sicuro.
     if (cleanRows.length > 0) {
-      const insertResult = await supabase.from(table).insert(cleanRows);
-      if (insertResult.error) throw insertResult.error;
+      const upsertResult = await supabase
+        .from(table)
+        .upsert(cleanRows, { onConflict: "id" });
+
+      if (upsertResult.error) throw upsertResult.error;
     }
   }
 
@@ -888,6 +895,15 @@ useEffect(() => localStorage.setItem("bt-trends", JSON.stringify(trends)), [tren
         `${oldProduct?.name || "Prodotto"} segnato come venduto.`,
         "success"
       );
+    }
+  }
+
+  async function deleteFromSupabase(table: string, id: number) {
+    if (!supabase) return;
+
+    const result = await supabase.from(table).delete().eq("id", id);
+    if (result.error) {
+      setCloudError(result.error.message || "Errore eliminazione cloud");
     }
   }
 
@@ -1645,7 +1661,7 @@ async function uploadProductImage(productId: number, file: File) {
 
         {["Inventario", "Da Caricare", "Online", "Venduti", "Ordini da Spedire"].includes(active) && (
           <>
-            <ProductsTable title={active} products={visibleProducts} updateProduct={updateProduct} deleteProduct={(id: number) => setProducts((p) => p.filter((x) => x.id !== id))} addProduct={addProduct} uploadProductImage={uploadProductImage} generateVintedDraft={generateVintedDraft} />
+            <ProductsTable title={active} products={visibleProducts} updateProduct={updateProduct} deleteProduct={(id: number) => { setProducts((p) => p.filter((x) => x.id !== id)); deleteFromSupabase("products", id); }} addProduct={addProduct} uploadProductImage={uploadProductImage} generateVintedDraft={generateVintedDraft} />
             {active === "Ordini da Spedire" && <ShippingKanban products={products} updateProduct={updateProduct} />}
           </>
         )}
@@ -1860,7 +1876,7 @@ function SuppliersSection({ suppliers, setSuppliers }: any) {
               <td key={field} className={field === "name" ? "py-4" : ""}><input value={String(supplier[field])} onChange={(e) => setSuppliers((prev: Supplier[]) => prev.map((s) => s.id === supplier.id ? { ...s, [field]: e.target.value } : s))} className={`${field === "notes" ? "w-64" : field === "contact" ? "w-56 text-purple-300" : "w-48"} rounded-2xl border border-white/10 bg-[#171925]/80 px-4 py-2.5 text-[13px] font-semibold text-zinc-100 shadow-inner shadow-black/20 outline-none transition placeholder:text-zinc-600 hover:border-white/15 focus:border-purple-500/60 focus:bg-[#1b1d2b] focus:ring-2 focus:ring-purple-500/20 ${field === "name" ? "font-bold" : ""}`} /></td>
             ))}
             <td><select value={supplier.rating} onChange={(e) => setSuppliers((prev: Supplier[]) => prev.map((s) => s.id === supplier.id ? { ...s, rating: Number(e.target.value) } : s))} className="rounded-xl border border-white/10 bg-[#171925] px-3 py-2 text-yellow-400 outline-none"><option value={1}>★☆☆☆☆</option><option value={2}>★★☆☆☆</option><option value={3}>★★★☆☆</option><option value={4}>★★★★☆</option><option value={5}>★★★★★</option></select></td>
-            <td><button onClick={() => setSuppliers((prev: Supplier[]) => prev.filter((s) => s.id !== supplier.id))} className="rounded-xl border border-red-500/20 bg-red-500/20 px-3 py-2 text-red-300 transition hover:bg-red-500/30">Elimina</button></td>
+            <td><button onClick={() => { setSuppliers((prev: Supplier[]) => prev.filter((s) => s.id !== supplier.id)); }} className="rounded-xl border border-red-500/20 bg-red-500/20 px-3 py-2 text-red-300 transition hover:bg-red-500/30">Elimina</button></td>
           </tr>
         ))}
       </tbody></table></div>
