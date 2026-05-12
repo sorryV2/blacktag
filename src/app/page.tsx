@@ -70,6 +70,21 @@ type Expense = {
   date: string;
 };
 
+type TrackingOrder = {
+  id: number;
+  productName: string;
+  platform: string;
+  buyer: string;
+  salePrice: number;
+  shippingCost: number;
+  tracking: string;
+  courier: string;
+  status: "Da spedire" | "In transito" | "Consegnato" | "Reso";
+  shipDate: string;
+  notes: string;
+};
+
+
 type TrendItem = {
   id: number;
   product: string;
@@ -400,6 +415,22 @@ const defaultSupplierOrders: SupplierOrder[] = [
   { id: 2, code: "#HAUL002", supplier: "Alibaba Supplier", products: "Pantaloni cargo x8", cost: 224, tracking: "ALB88291", status: "Warehouse", eta: "12 giorni" },
 ];
 
+const defaultTrackingOrders: TrackingOrder[] = [
+  {
+    id: 1,
+    productName: "Nike Tech Fleece Hoodie",
+    platform: "Vinted",
+    buyer: "utente_vinted",
+    salePrice: 89.99,
+    shippingCost: 4.99,
+    tracking: "Da inserire",
+    courier: "Poste Italiane",
+    status: "Da spedire",
+    shipDate: new Date().toISOString().slice(0, 10),
+    notes: "Preparare pacco",
+  },
+];
+
 const defaultExpenses: Expense[] = [
   { id: 1, name: "Haul Maggio", category: "Prodotti", amount: 185, date: "2025-05-24" },
   { id: 2, name: "Dominio cliente", category: "Siti Web", amount: 12, date: "2025-05-20" },
@@ -414,7 +445,7 @@ const imageList = defaultProducts.map((p) => p.image);
 
 const menuGroups = [
   { title: "", items: [["Dashboard", Home]] },
-  { title: "VINTED BUSINESS", items: [["Inventario", Package], ["Da Caricare", Upload], ["Online", Globe], ["Venduti", ShoppingBag], ["Ordini da Spedire", Truck], ["Statistiche", BarChart3]] },
+  { title: "VINTED BUSINESS", items: [["Inventario", Package], ["Da Caricare", Upload], ["Online", Globe], ["Venduti", ShoppingBag], ["Ordini da Spedire", Truck], ["Tracking Ordini", Truck], ["Statistiche", BarChart3]] },
   { title: "FORNITORI", items: [["Fornitori", Users], ["Ordini Fornitori", Box], ["Spese", Wallet]] },
   { title: "SITI WEB & CLIENTI", items: [["Clienti", UserRound], ["Siti Web", Building2], ["Abbonamenti", CreditCard], ["Fatture", ReceiptText]] },
   { title: "STRUMENTI AI", items: [["Generatore Descrizioni", Bot], ["Ricerca Trend", Search], ["Suggeritore Prezzi", Sparkles]] },
@@ -468,6 +499,9 @@ export default function HomePage() {
   );
   const [expenses, setExpenses] = useState<Expense[]>(() =>
     loadLS("bt-expenses", defaultExpenses)
+  );
+  const [trackingOrders, setTrackingOrders] = useState<TrackingOrder[]>(() =>
+    loadLS("bt-tracking-orders", defaultTrackingOrders)
   );
   const [trends, setTrends] = useState<TrendItem[]>(() =>
     loadLS("bt-trends", defaultTrends)
@@ -720,6 +754,10 @@ const [vintedResults, setVintedResults] = useState<VintedResult[]>([]);
   }, [expenses]);
 
   useEffect(() => {
+    localStorage.setItem("bt-tracking-orders", JSON.stringify(trackingOrders));
+  }, [trackingOrders]);
+
+  useEffect(() => {
     localStorage.setItem("bt-trends", JSON.stringify(trends));
   }, [trends]);
 
@@ -848,6 +886,7 @@ useEffect(() => localStorage.setItem("bt-trends", JSON.stringify(trends)), [tren
     Online: stats.online.length,
     Venduti: stats.sold.length,
     "Ordini da Spedire": stats.shipping.length,
+    "Tracking Ordini": trackingOrders.length,
     Fornitori: suppliers.length,
     "Ordini Fornitori": supplierOrders.length,
     Spese: expenses.length,
@@ -1666,6 +1705,7 @@ async function uploadProductImage(productId: number, file: File) {
           </>
         )}
 
+        {active === "Tracking Ordini" && <TrackingOrdersSection orders={trackingOrders} setOrders={setTrackingOrders} />}
         {active === "Fornitori" && <SuppliersSection suppliers={suppliers} setSuppliers={setSuppliers} />}
         {active === "Ordini Fornitori" && <SupplierOrdersSection supplierOrders={supplierOrders} setSupplierOrders={setSupplierOrders} />}
         {active === "Spese" && <ExpensesSection expenses={expenses} setExpenses={setExpenses} expenseCost={stats.expenseCost} selectedDate={selectedDate} />}
@@ -1862,6 +1902,108 @@ function ProductsTable({ title, products, updateProduct, deleteProduct, addProdu
         ))}
       </tbody></table></div>
     </Panel>
+  );
+}
+
+
+function TrackingOrdersSection({ orders, setOrders }: any) {
+  const statuses: TrackingOrder["status"][] = ["Da spedire", "In transito", "Consegnato", "Reso"];
+
+  function addOrder() {
+    setOrders((prev: TrackingOrder[]) => [
+      ...prev,
+      {
+        id: Date.now(),
+        productName: "Nuovo ordine",
+        platform: "Vinted",
+        buyer: "Cliente",
+        salePrice: 0,
+        shippingCost: 0,
+        tracking: "",
+        courier: "Poste Italiane",
+        status: "Da spedire",
+        shipDate: new Date().toISOString().slice(0, 10),
+        notes: "",
+      },
+    ]);
+  }
+
+  function updateOrder(id: number, field: keyof TrackingOrder, value: string) {
+    setOrders((prev: TrackingOrder[]) =>
+      prev.map((order) =>
+        order.id === id
+          ? { ...order, [field]: field === "salePrice" || field === "shippingCost" ? Number(value) : value }
+          : order
+      )
+    );
+  }
+
+  const totalRevenue = orders.reduce((sum: number, order: TrackingOrder) => sum + Number(order.salePrice || 0), 0);
+  const totalShipping = orders.reduce((sum: number, order: TrackingOrder) => sum + Number(order.shippingCost || 0), 0);
+  const delivered = orders.filter((order: TrackingOrder) => order.status === "Consegnato").length;
+
+  return (
+    <section className="space-y-5">
+      <Panel>
+        <div className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+          <div>
+            <div className="inline-flex items-center gap-2 rounded-full border border-purple-500/20 bg-purple-500/10 px-3 py-1 text-xs font-bold text-purple-200">
+              <span className="h-2 w-2 rounded-full bg-green-400 shadow-lg shadow-green-400/60" />
+              ORDER TRACKING
+            </div>
+            <h3 className="mt-3 text-3xl font-black tracking-[-0.04em]">Tracking Ordini</h3>
+            <p className="text-sm text-zinc-400">Gestisci spedizioni, tracking, corrieri, resi e consegne.</p>
+          </div>
+          <button onClick={addOrder} className="rounded-2xl bg-gradient-to-r from-purple-700 to-fuchsia-600 px-5 py-3 text-sm font-black shadow-lg shadow-purple-700/25 transition hover:-translate-y-0.5">
+            + Aggiungi Ordine
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+          <Metric title="Ordini Totali" value={orders.length} tone="purple" />
+          <Metric title="Consegnati" value={delivered} tone="green" />
+          <Metric title="Incasso Ordini" value={`€${totalRevenue.toFixed(2)}`} tone="blue" />
+          <Metric title="Costi Spedizione" value={`€${totalShipping.toFixed(2)}`} tone="yellow" />
+        </div>
+      </Panel>
+
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-4">
+        {statuses.map((status) => (
+          <Panel key={status}>
+            <div className="mb-4 flex items-center justify-between">
+              <h4 className="font-black">{status}</h4>
+              <span className="rounded-full bg-white/10 px-3 py-1 text-xs">{orders.filter((order: TrackingOrder) => order.status === status).length}</span>
+            </div>
+
+            <div className="space-y-3">
+              {orders.filter((order: TrackingOrder) => order.status === status).map((order: TrackingOrder) => (
+                <div key={order.id} className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                  <input value={order.productName} onChange={(e) => updateOrder(order.id, "productName", e.target.value)} className="mb-2 w-full bg-transparent text-sm font-black outline-none" />
+                  <div className="grid grid-cols-2 gap-2">
+                    <input value={order.platform} onChange={(e) => updateOrder(order.id, "platform", e.target.value)} placeholder="Piattaforma" className="rounded-xl border border-white/10 bg-[#171925]/80 px-3 py-2 text-xs text-white outline-none" />
+                    <input value={order.buyer} onChange={(e) => updateOrder(order.id, "buyer", e.target.value)} placeholder="Cliente" className="rounded-xl border border-white/10 bg-[#171925]/80 px-3 py-2 text-xs text-white outline-none" />
+                    <input type="number" value={order.salePrice} onChange={(e) => updateOrder(order.id, "salePrice", e.target.value)} placeholder="Prezzo" className="rounded-xl border border-white/10 bg-[#171925]/80 px-3 py-2 text-xs text-white outline-none" />
+                    <input type="number" value={order.shippingCost} onChange={(e) => updateOrder(order.id, "shippingCost", e.target.value)} placeholder="Spedizione" className="rounded-xl border border-white/10 bg-[#171925]/80 px-3 py-2 text-xs text-white outline-none" />
+                  </div>
+                  <input value={order.tracking} onChange={(e) => updateOrder(order.id, "tracking", e.target.value)} placeholder="Tracking number" className="mt-2 w-full rounded-xl border border-white/10 bg-[#171925]/80 px-3 py-2 text-xs text-purple-200 outline-none" />
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    <input value={order.courier} onChange={(e) => updateOrder(order.id, "courier", e.target.value)} placeholder="Corriere" className="rounded-xl border border-white/10 bg-[#171925]/80 px-3 py-2 text-xs text-white outline-none" />
+                    <input type="date" value={order.shipDate} onChange={(e) => updateOrder(order.id, "shipDate", e.target.value)} className="rounded-xl border border-white/10 bg-[#171925]/80 px-3 py-2 text-xs text-white outline-none" />
+                  </div>
+                  <select value={order.status} onChange={(e) => updateOrder(order.id, "status", e.target.value)} className="mt-2 w-full rounded-xl border border-purple-400/25 bg-[#171925] px-3 py-2 text-xs font-bold text-white outline-none">
+                    {statuses.map((item) => <option key={item}>{item}</option>)}
+                  </select>
+                  <textarea value={order.notes} onChange={(e) => updateOrder(order.id, "notes", e.target.value)} placeholder="Note spedizione..." className="mt-2 h-16 w-full resize-none rounded-xl border border-white/10 bg-[#171925]/80 px-3 py-2 text-xs text-white outline-none" />
+                  <button onClick={() => setOrders((prev: TrackingOrder[]) => prev.filter((item) => item.id !== order.id))} className="mt-3 rounded-xl border border-red-500/20 bg-red-500/20 px-3 py-2 text-xs font-black text-red-300 transition hover:bg-red-500/30">
+                    Elimina
+                  </button>
+                </div>
+              ))}
+            </div>
+          </Panel>
+        ))}
+      </div>
+    </section>
   );
 }
 
