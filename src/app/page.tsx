@@ -409,6 +409,22 @@ function loadLS<T>(key: string, fallback: T): T {
   }
 }
 
+function normalizeProducts(rows: any[]): Product[] {
+  if (!Array.isArray(rows)) return [];
+
+  return rows.map((product: any) => ({
+    ...product,
+    id: Number(product?.id || Date.now()),
+    name: String(product?.name || "Nuovo prodotto"),
+    brand: String(product?.brand || "Brand"),
+    size: String(product?.size || ""),
+    image: String(product?.image || imageList[0]),
+    cost: Number(product?.cost || 0),
+    price: Number(product?.price || 0),
+    status: (product?.status || "Da Caricare") as Status,
+  }));
+}
+
 export default function HomePage() {
   const [active, setActive] = useState("Dashboard");
   const [mobileMenu, setMobileMenu] = useState(false);
@@ -420,7 +436,7 @@ export default function HomePage() {
     loadLS("bt-notifications", [])
   );
   const [products, setProducts] = useState<Product[]>(() =>
-    loadLS("bt-products", defaultProducts)
+    normalizeProducts(loadLS("bt-products", defaultProducts))
   );
   const [clients, setClients] = useState<Client[]>(() =>
     loadLS("bt-clients", defaultClients)
@@ -691,7 +707,7 @@ const [vintedResults, setVintedResults] = useState<VintedResult[]>([]);
   }
 
   useEffect(() => {
-    localStorage.setItem("bt-products", JSON.stringify(products));
+    localStorage.setItem("bt-products", JSON.stringify(normalizeProducts(products as any)));
 
     if (!cloudReady) return;
     replaceSupabaseTable("products", products).catch((error) =>
@@ -728,7 +744,7 @@ const [vintedResults, setVintedResults] = useState<VintedResult[]>([]);
 
 
   useEffect(() => {
-    localStorage.setItem("bt-products", JSON.stringify(products));
+    localStorage.setItem("bt-products", JSON.stringify(normalizeProducts(products as any)));
   }, [products]);
 
   useEffect(() => {
@@ -957,7 +973,7 @@ useEffect(() => localStorage.setItem("bt-trends", JSON.stringify(trends)), [tren
         p.id === id
           ? {
               ...p,
-              [field]: field === "cost" || field === "price" ? (value === "" ? ("" as any) : Number(value)) : value,
+              [field]: field === "cost" || field === "price" ? Number(value || 0) : value,
             }
           : p
       )
@@ -992,14 +1008,14 @@ useEffect(() => localStorage.setItem("bt-trends", JSON.stringify(trends)), [tren
         brand: "Brand",
         size: "",
         image: imageList[0],
-        cost: "" as any,
-        price: "" as any,
+        cost: 0,
+        price: 0,
         status: "Da Caricare",
         sku: `BT-${id}` as any,
         category: "" as any,
         condition: "" as any,
         platform: "Vinted" as any,
-        fee: "" as any,
+        fee: 0 as any,
         notes: "" as any,
       } as any,
     ]);
