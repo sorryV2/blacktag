@@ -6,7 +6,7 @@ import {
   Home, Package, Upload, Globe, ShoppingBag, Truck, Users, ReceiptText,
   Settings, Bot, Search, Bell, Calendar, Box, Wallet, TrendingUp, Plus,
   Trash2, Building2, ExternalLink, UserRound, Store, Sparkles, BarChart3,
-  CreditCard, Link2, FileText, Wand2, Shield, Menu, X, Sun, Moon, Download, FileDown, GripVertical
+  CreditCard, Link2, FileText, Wand2, Shield, Menu, X, Sun, Moon, Download, FileDown, GripVertical, Video
 } from "lucide-react";
 import {
   ResponsiveContainer,
