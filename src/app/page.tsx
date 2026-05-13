@@ -373,7 +373,7 @@ const imageList = [
 
 const menuGroups = [
   { title: "", items: [["Dashboard", Home]] },
-  { title: "VINTED BUSINESS", items: [["Inventario", Package], ["Da Caricare", Upload], ["Online", Globe], ["Venduti", ShoppingBag], ["Ordini da Spedire", Truck], ["Ordini Pro", ReceiptText], ["Tracking Ordini", Truck], ["Statistiche", BarChart3], ["Content AI", Video]] },
+  { title: "VINTED BUSINESS", items: [["Inventario", Package], ["Da Caricare", Upload], ["Online", Globe], ["Venduti", ShoppingBag], ["Ordini da Spedire", Truck], ["Ordini Pro", ReceiptText], ["Tracking Ordini", Truck], ["Statistiche", BarChart3], ["Content AI", Video], ["Phase 6", TrendingUp]] },
   { title: "FORNITORI", items: [["Fornitori", Users], ["Ordini Fornitori", Box], ["Spese", Wallet]] },
   { title: "SITI WEB & CLIENTI", items: [["Clienti", UserRound], ["Siti Web", Building2], ["Abbonamenti", CreditCard], ["Fatture", ReceiptText]] },
   { title: "TIKTOK & VINTED", items: [["TikTok Shop", TrendingUp], ["Vinted Center", ShoppingBag], ["Content Planner", Calendar]] },
@@ -460,6 +460,22 @@ export default function HomePage() {
 
   const [contentDrafts, setContentDrafts] = useState<any[]>(() =>
     loadLS("bt-content-drafts", [])
+  );
+
+  const [trendPosts, setTrendPosts] = useState<any[]>(() =>
+    loadLS("bt-trend-posts", [
+      {
+        id: 1,
+        title: "Nike tech dark fit",
+        score: 94,
+        hour: "19:30",
+        platform: "TikTok"
+      }
+    ])
+  );
+
+  const [vipClients, setVipClients] = useState<any[]>(() =>
+    loadLS("bt-vip-clients", [])
   );
   const [trends, setTrends] = useState<TrendItem[]>(() =>
     loadLS("bt-trends", defaultTrends)
@@ -789,6 +805,8 @@ const [vintedResults, setVintedResults] = useState<VintedResult[]>([]);
 
   useEffect(() => {
     localStorage.setItem("bt-content-drafts", JSON.stringify(contentDrafts));
+    localStorage.setItem("bt-trend-posts", JSON.stringify(trendPosts));
+    localStorage.setItem("bt-vip-clients", JSON.stringify(vipClients));
   }, [contentDrafts]);
 
   useEffect(() => {
@@ -923,6 +941,7 @@ useEffect(() => localStorage.setItem("bt-trends", JSON.stringify(trends)), [tren
     "Tracking Ordini": trackingOrders.length,
     "Ordini Pro": salesOrders.length,
     "Content AI": contentDrafts.length,
+    "Phase 6": trendPosts.length,
     Fornitori: suppliers.length,
     "Ordini Fornitori": supplierOrders.length,
     Spese: expenses.length,
@@ -1795,6 +1814,7 @@ async function uploadProductImage(productId: number, file: File) {
           </>
         )}
 
+        {active === "Phase 6" && <Phase6Section trendPosts={trendPosts} vipClients={vipClients} setVipClients={setVipClients} />}
         {active === "Content AI" && <ContentAISection products={products} drafts={contentDrafts} setDrafts={setContentDrafts} />}
         {active === "Ordini Pro" && <OrdersProSection products={products} setProducts={setProducts} orders={salesOrders} setOrders={setSalesOrders} addNotification={addNotification} />}
         {active === "Tracking Ordini" && <TrackingOrdersSection orders={trackingOrders} setOrders={setTrackingOrders} />}
@@ -4095,6 +4115,88 @@ function OrdersProSection({ products, setProducts, orders, setOrders, addNotific
 }
 
 
+
+
+
+function Phase6Section({ trendPosts, vipClients, setVipClients }: any) {
+
+  function addVip() {
+    const name = prompt("Nome cliente VIP");
+    if (!name) return;
+
+    setVipClients((prev: any[]) => [
+      {
+        id: Date.now(),
+        name,
+        spent: Math.floor(Math.random() * 3000) + 200,
+        notes: "Cliente premium",
+        reminder: "Ricontattare presto"
+      },
+      ...prev
+    ]);
+  }
+
+  return (
+    <section className="space-y-5">
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+
+        <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
+          <div className="text-sm text-zinc-400">Trend attivi</div>
+          <div className="mt-3 text-4xl font-black">{trendPosts.length}</div>
+        </div>
+
+        <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
+          <div className="text-sm text-zinc-400">Clienti VIP</div>
+          <div className="mt-3 text-4xl font-black">{vipClients.length}</div>
+        </div>
+
+        <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
+          <div className="text-sm text-zinc-400">Viral score</div>
+          <div className="mt-3 text-4xl font-black">87%</div>
+        </div>
+
+        <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
+          <div className="text-sm text-zinc-400">Best posting hour</div>
+          <div className="mt-3 text-4xl font-black">19:30</div>
+        </div>
+
+      </div>
+
+      <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
+        <div className="mb-5 flex items-center justify-between">
+          <div>
+            <h3 className="text-2xl font-black">CRM VIP</h3>
+            <p className="text-sm text-zinc-400">Clienti premium reseller</p>
+          </div>
+
+          <button
+            onClick={addVip}
+            className="rounded-2xl bg-yellow-500/20 px-4 py-2 text-sm font-black text-yellow-200"
+          >
+            + VIP
+          </button>
+        </div>
+
+        <div className="space-y-3">
+          {vipClients.map((client: any) => (
+            <div key={client.id} className="rounded-2xl border border-white/10 bg-black/20 p-4">
+              <div className="flex items-center justify-between">
+                <div className="font-black">{client.name}</div>
+                <div className="text-fuchsia-300">€{client.spent}</div>
+              </div>
+
+              <div className="mt-2 text-sm text-zinc-400">
+                {client.notes}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+    </section>
+  );
+}
 
 function ContentAISection({ products, drafts, setDrafts }: any) {
   const styles = {
