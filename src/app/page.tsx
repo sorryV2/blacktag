@@ -355,11 +355,7 @@ function getConicGradient(categories: { name: string; percent: number; color: st
 
 const defaultProducts: Product[] = [];
 
-const defaultClients: Client[] = [
-  { id: 1, name: "Ristorante Milano", business: "Ristorante", monthly: 150, paid: 900, site: "ristorantemilano.it", status: "Attivo" },
-  { id: 2, name: "Severino Sushi", business: "Sushi Bar", monthly: 180, paid: 360, site: "severinosushi.it", status: "In sviluppo" },
-  { id: 3, name: "Bar Centrale", business: "Bar", monthly: 120, paid: 240, site: "barcentrale.it", status: "Da contattare" },
-];
+const defaultClients: Client[] = [];
 
 const defaultSuppliers: Supplier[] = [];
 
@@ -621,6 +617,22 @@ const [vintedResults, setVintedResults] = useState<VintedResult[]>([]);
   }
 
   useEffect(() => {
+    const hasLocalData =
+      typeof window !== "undefined" &&
+      (
+        localStorage.getItem("bt-products") ||
+        localStorage.getItem("bt-clients") ||
+        localStorage.getItem("bt-suppliers") ||
+        localStorage.getItem("bt-supplier-orders") ||
+        localStorage.getItem("bt-expenses") ||
+        localStorage.getItem("bt-tracking-orders")
+      );
+
+    if (hasLocalData) {
+      setCloudReady(true);
+      return;
+    }
+
     refreshCloudData();
   }, []);
 
@@ -945,7 +957,7 @@ useEffect(() => localStorage.setItem("bt-trends", JSON.stringify(trends)), [tren
         p.id === id
           ? {
               ...p,
-              [field]: field === "cost" || field === "price" ? Number(value) : value,
+              [field]: field === "cost" || field === "price" ? (value === "" ? ("" as any) : Number(value)) : value,
             }
           : p
       )
@@ -978,12 +990,18 @@ useEffect(() => localStorage.setItem("bt-trends", JSON.stringify(trends)), [tren
         id,
         name: "Nuovo prodotto",
         brand: "Brand",
-        size: "Taglia",
+        size: "",
         image: imageList[0],
-        cost: 0,
-        price: 0,
+        cost: "" as any,
+        price: "" as any,
         status: "Da Caricare",
-      },
+        sku: `BT-${id}` as any,
+        category: "" as any,
+        condition: "" as any,
+        platform: "Vinted" as any,
+        fee: "" as any,
+        notes: "" as any,
+      } as any,
     ]);
 
     setActive("Inventario");
